@@ -102,7 +102,7 @@ bool addView(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 
 bool estimateEntropy(fremen::Entropy::Request  &req, fremen::Entropy::Response &res)
 {
-	res.value = 1.0;
+	res.value = fabs(req.x)+fabs(req.y)+fabs(req.z);
 }
 
 bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response &res)
