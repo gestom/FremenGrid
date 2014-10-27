@@ -100,6 +100,11 @@ bool addView(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 	integrateMeasurements = 1;
 }
 
+bool estimateEntropy(fremen::Entropy::Request  &req, fremen::Entropy::Response &res)
+{
+	res.value = 1.0;
+}
+
 bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response &res)
 {
 	//init visualization markers:
@@ -155,14 +160,14 @@ bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response
 
 int main(int argc,char *argv[])
 {
-    ros::init(argc, argv, "froctomap");
+    ros::init(argc, argv, "fremengrid");
     ros::NodeHandle n;
     grid = new CFremenGrid(MIN_X,MIN_Y,MIN_Z,DIM_X,DIM_Y,DIM_Z,RESOLUTION);
     tf_listener    = new tf::TransformListener();
 
     ros::Time now = ros::Time(0);
     tf_listener->waitForTransform("/head_xtion_depth_optical_frame","/map",now, ros::Duration(3.0));
-    ROS_INFO("KOKOT");
+    ROS_INFO("Fremen grid start");
 
     //Subscribers:
     ros::Subscriber sub = n.subscribe<sensor_msgs::PointCloud2> ("/head_xtion/depth/points",  1000, points);
@@ -170,6 +175,7 @@ int main(int argc,char *argv[])
 
     //Services:
     ros::ServiceServer retrieve_service = n.advertiseService("/fremenGrid/visualize", visualizeGrid);
+    ros::ServiceServer information_gain = n.advertiseService("/fremenGrid/entropy", estimateEntropy);
     ros::ServiceServer add_service = n.advertiseService("/fremenGrid/measure", addView);
     ros::ServiceServer save_service = n.advertiseService("/fremenGrid/save", saveGrid);
     ros::ServiceServer load_service = n.advertiseService("/fremenGrid/load", loadGrid);
