@@ -33,7 +33,7 @@ CFremenGrid *grid;
 tf::TransformListener *tf_listener;
 
 ros::Publisher *octomap_pub_ptr, *estimate_pub_ptr,*clock_pub_ptr;
-ros::Publisher retrieve_publisher;;
+ros::Publisher retrieve_publisher;
  
 bool loadGrid(fremen::SaveLoad::Request  &req, fremen::SaveLoad::Response &res)
 {
