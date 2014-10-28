@@ -102,7 +102,7 @@ bool addView(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 
 bool estimateEntropy(fremen::Entropy::Request  &req, fremen::Entropy::Response &res)
 {
-	res.value = fabs(req.x)+fabs(req.y)+fabs(req.z);
+	res.value = grid->getInformation(req.x,req.y,req.z,M_PI,0.4,req.r,req.t);
 }
 
 bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response &res)
@@ -181,7 +181,7 @@ int main(int argc,char *argv[])
     ros::ServiceServer load_service = n.advertiseService("/fremenGrid/load", loadGrid);
 
     ros::spin();
-
-    free(grid);
+    delete tf_listener;
+    delete grid;
     return 0;
 }

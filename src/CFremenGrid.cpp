@@ -4,6 +4,7 @@ using namespace std;
 
 CFremenGrid::CFremenGrid(float originX,float originY,float originZ,int dimX,int dimY,int dimZ,float cellSize)
 {
+	debug = false;
 	oX = originX;
 	oY = originY;
 	oZ = originZ;
@@ -16,6 +17,7 @@ CFremenGrid::CFremenGrid(float originX,float originY,float originZ,int dimX,int 
 	probs = (float*) malloc(numCells*sizeof(float));
 	for (int i = 0;i<numCells;i++)probs[i] = 0.5;
 	if (debug) printf("Float size: %i \n",(int)sizeof(double));
+	lastPhiRange=lastPsiRange=lastRange=numRaycasters = 0;
 	//cellArray = (CFrelement**) malloc(numCells*sizeof(CFrelement*));
 	//for (int i=0;i<numCells;i++) cellArray[i] = new CFrelement();
 	
@@ -23,6 +25,9 @@ CFremenGrid::CFremenGrid(float originX,float originY,float originZ,int dimX,int 
 
 CFremenGrid::~CFremenGrid()
 {
+	free(raycasters);
+	free(aux);
+	free(probs);
 	//for (int i=0;i<numCells;i++) free(cellArray[i]);
 	//free(cellArray);
 
@@ -40,130 +45,200 @@ int CFremenGrid::getIndex(float x,float  y,float  z)
 
 float CFremenGrid::getInformation(float sx,float sy,float sz,float phiRange,float psiRange,float range,float timeStamp)
 {
-	float x[200000];	
-	float y[200000];	
-	float z[200000];
-	int size = 0;
-	for (int phi = phiRange;phi<phiRange;phi+=0.01){
-		for (int psi = -psiRange;psi<psiRange;psi+=0.01){
-			x[size] = range*cos(phi)*cos(psi); 
-			y[size] = range*sin(phi)*cos(psi); 
-			z[size] = range*sin(psi); 
-		}
-		size++;
-	}
-
 	CTimer timer;
 	timer.reset();
 	timer.start();
-
-	float px,py,pz,rx,ry,rz,ax,ay,az,bx,by,bz,cx,cy,cz;
-	int startIndex,ix,iy,iz,index,final,xStep,yStep,zStep;
-	unsigned char process[size];
-	bool subsample = true;
-	
-	memset(aux,0,sizeof(char));
-	//rescale ray intersections to match the grid
-	//rescale only one ray per cell, adjust ray direction to go to the ray centre 
-	memset(process,0,size);
-	for (int i = 0;i<size+1;i++){
-		x[i] = fmin(fmax(floor((x[i]-oX)/resolution),0)+0.5,xDim-1);
-		y[i] = fmin(fmax(floor((y[i]-oY)/resolution),0)+0.5,yDim-1);
-		z[i] = fmin(fmax(floor((z[i]-oZ)/resolution),0)+0.5,zDim-1);
-		final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
-		if (aux[final] != 1){
-			aux[final] = 1;
-			process[i] = 1;
-		}
-	}
-	printf("Rescaling %i\n",timer.getTime());
-	//raycast origin in float and int 
-	int i = 0;
-	//calculate the point of origin
-	px = x[size];
-	py = y[size];
-	pz = z[size];
-	//calculate the initial cell index
-	startIndex =  (int)px+xDim*((int)py+yDim*((int)pz));
+	memset(aux,0,numCells*sizeof(char));
 	int prepare  = 0;
-	int calculate = 0;;
+	int calculate = 0;
+	int preprocess = 0;
+	float entropy = 0;
+	float px = (floor(sx/resolution)+0.5);
+	float py = (floor(sy/resolution)+0.5);
+	float pz = (floor(sz/resolution)+0.5);
+	float offX = oX/resolution;
+	float offY = oY/resolution;
+	float offZ = oZ/resolution;
+	px -= offX;	
+	py -= offY;	
+	pz -= offZ;
+	int startIndex =  (int)px+xDim*((int)py+yDim*((int)pz));
 
-	for (int i = 0;i<size;i++)
+	if (phiRange != lastPhiRange || psiRange != lastPsiRange || range != lastRange)
 	{
-		timer.reset();
-		if (process[i]){
-			//calculate the ray vector 
-			rx = (x[i]-px);
-			ry = (y[i]-py);
-			rz = (z[i]-pz);
-
-			//calculate the general direction of the ray 
-			ix = 1; 
-			iy = 1; 
-			iz = 1; 
-			if (rx < 0) ix = -1;
-			if (ry < 0) iy = -1;
-			if (rz < 0) iz = -1;
-			if (fabs(rx) < 1.0/xDim) ix = 0; 
-			if (fabs(ry) < 1.0/yDim) iy = 0; 
-			if (fabs(rz) < 1.0/zDim) iz = 0; 
-
-			//establish increments when moving in the grid
-			xStep = ix; 
-			yStep = iy*xDim; 
-			zStep = iz*xDim*yDim;
-
-			//establish the first and last cell index 
-			index = startIndex;
-			final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
-			//initialize values of the expected intersections
-			bx=by=bz=cx=cy=cz = xDim*yDim*zDim; //high enough to be outside of the grid
-
-			//initialize first intersection planes - these are in the general direction of the ray vector
-			ax = floor(px)+(ix+1)/2;
-			ay = floor(py)+(iy+1)/2;
-			az = floor(pz)+(iz+1)/2;
-
-			//calculate intersections with the planes
-			if (ix != 0) bx = (ax-px)/rx;
-			if (iy != 0) by = (ay-py)/ry;
-			if (iz != 0) bz = (az-pz)/rz;
-
-			//calculate the position increments when intersecting the following planes 
-			if (ix != 0) cx = ix/rx;
-			if (iy != 0) cy = iy/ry;
-			if (iz != 0) cz = iz/rz;
-
-			//if (debug) printf("Indices %i %i %.2f %.2f %.2f %.2f %.2f %.2f \n",index,final,bx,by,bz,cx,cy,cz);
-			prepare += timer.getTime();
-			timer.reset();
-		
-			// start the grid traversal process 
-			for (int j=0;index!=final;j++)
-			{
-				//if (debug) printf("Index %06i %06i %06i %.2f %.2f %.2f %.2f\n",index,final,startIndex,bx,bx*rx+px,by*ry+py,bz*rz+pz);
-				if (aux[index] == 0){
-					aux[index] = 1;
-					probs[index] = 0;
-				}
-				if (bx < by && bx < bz)
-				{
-					bx+=cx;
-					index+=xStep;
-				}
-				else if (by < bz)
-				{
-					by+=cy;
-					index+=yStep;
-				}else{
-					bz+=cz;
-					index+=zStep;
-				}
-			}
-			calculate += timer.getTime();
-		}
+		if (numRaycasters > 0) free(raycasters);
+		numRaycasters = 0;
+		lastPhiRange = phiRange;
+		lastPsiRange  = psiRange;
+		lastRange = range;
 	}
-	printf("Times to prepare and calculate %i %i \n",prepare,calculate);
+	//precalculate raycasting structures
+	if (numRaycasters == 0)
+	{
+
+		px += offX;	
+		py += offY;	
+		pz += offZ;
+		numRaycasters = 0;
+		float *x = (float*)malloc(sizeof(float)*10000000);	
+		float *y = (float*)malloc(sizeof(float)*10000000);	
+		float *z = (float*)malloc(sizeof(float)*10000000);	
+		int size = 0;
+		float phiStep;
+		float granularity = resolution/range/4;
+		float rx,ry,rz,ax,ay,az,bx,by,bz,cx,cy,cz;
+		int ix,iy,iz,index,final,xStep,yStep,zStep;
+
+		range/=resolution;
+		for (float psi = -psiRange;psi<=psiRange;psi+=granularity)
+		{
+			phiStep = granularity/cos(psi);
+			for (float phi = -phiRange;phi<=phiRange;phi+=phiStep){
+				x[size] = range*cos(phi)*cos(psi)+px; 
+				y[size] = range*sin(phi)*cos(psi)+py; 
+				z[size] = range*sin(psi)+pz; 
+				size++;
+			}
+		}
+		//printf("Number of rays: %i\n",size);
+
+		unsigned char process[size];
+		//rescale only one ray per cell, adjust ray direction to go to the ray centre 
+		memset(process,0,size);
+		int unique = 0;
+
+		for (int i = 0;i<size;i++){
+			x[i] = fmin(fmax(floor(x[i]-offX),0)+0.5,xDim-1);
+			y[i] = fmin(fmax(floor(y[i]-offY),0)+0.5,yDim-1);
+			z[i] = fmin(fmax(floor(z[i]-offZ),0)+0.5,zDim-1);
+			final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
+			if (aux[final] != 1){
+				aux[final] = 1;
+				process[i] = 1;
+				unique++;
+			}
+		}
+
+		px -= offX;	
+		py -= offY;	
+		pz -= offZ;
+		//raycast origin in float and int 
+		int i = 0;
+		//calculate the point of origin
+		startIndex =  (int)px+xDim*((int)py+yDim*((int)pz));
+		prepare  = 0;
+		calculate = 0;;
+		preprocess = timer.getTime();
+		numRaycasters = 0;
+		for (int i = 0;i<size;i++) numRaycasters += process[i];
+
+		//pre-calculate the grid 
+		int raycastSize = sizeof(int)*300*numRaycasters;
+		printf("Cells %i %i\n",numRaycasters,raycastSize);
+		raycasters  = (int*)malloc(raycastSize);
+		int raycastIndex = 0;
+		for (int i = 0;i<size;i++)
+		{
+			timer.reset();
+			if (process[i]){
+				//calculate the ray vector 
+				rx = (x[i]-px);
+				ry = (y[i]-py);
+				rz = (z[i]-pz);
+
+				//calculate the general direction of the ray 
+				ix = 1; 
+				iy = 1; 
+				iz = 1; 
+				if (rx < 0) ix = -1;
+				if (ry < 0) iy = -1;
+				if (rz < 0) iz = -1;
+				if (fabs(rx) < 1.0/xDim) ix = 0; 
+				if (fabs(ry) < 1.0/yDim) iy = 0; 
+				if (fabs(rz) < 1.0/zDim) iz = 0; 
+
+				//establish increments when moving in the grid
+				xStep = ix; 
+				yStep = iy*xDim; 
+				zStep = iz*xDim*yDim;
+
+				//establish the first and last cell index 
+				index = startIndex;
+				final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
+				//initialize values of the expected intersections
+				bx=by=bz=cx=cy=cz = xDim*yDim*zDim; //high enough to be outside of the grid
+
+				//initialize first intersection planes - these are in the general direction of the ray vector
+				ax = floor(px)+(ix+1)/2;
+				ay = floor(py)+(iy+1)/2;
+				az = floor(pz)+(iz+1)/2;
+
+				//calculate intersections with the planes
+				if (ix != 0) bx = (ax-px)/rx;
+				if (iy != 0) by = (ay-py)/ry;
+				if (iz != 0) bz = (az-pz)/rz;
+
+				//calculate the position increments when intersecting the following planes 
+				if (ix != 0) cx = ix/rx;
+				if (iy != 0) cy = iy/ry;
+				if (iz != 0) cz = iz/rz;
+
+				//if (debug) printf("Indices %i %i %.2f %.2f %.2f %.2f %.2f %.2f \n",index,final,bx,by,bz,cx,cy,cz);
+				prepare += timer.getTime();
+				timer.reset();
+				bool free = true;
+				int indexI = 0;
+				// start the grid traversal process
+				int raycastStart = raycastIndex++;
+				for (int j=0;index!=final;j++)
+				{
+					index = startIndex + indexI;
+					if (bx < by && bx < bz)
+					{
+						bx+=cx;
+						indexI+=xStep;
+					}
+					else if (by < bz)
+					{
+						by+=cy;
+						indexI+=yStep;
+					}else{
+						bz+=cz;
+						indexI+=zStep;
+					}
+					raycasters[raycastIndex++] = indexI;
+				}
+				raycastIndex--;
+				raycasters[raycastStart] = raycastIndex-raycastStart;
+				calculate += timer.getTime();
+			}
+		}
+		free(x);
+		free(y);
+		free(z);
+	}
+	timer.reset();
+	int rayIndex = 0;
+	int cellIndex = startIndex;
+	bool cellFree=true;
+	float prob;
+	for (int i = 0;i<numRaycasters;i++){
+		int castLength = raycasters[rayIndex]+rayIndex;
+		cellFree=true;
+		for (int j = rayIndex+1;j<castLength&&cellFree;j++)
+		{
+			cellIndex = startIndex+raycasters[j];
+			prob = probs[cellIndex];
+			cellFree = prob < 0.7;
+			if (aux[cellIndex] == 0){
+				aux[cellIndex] = 1;
+				entropy-=prob*logf(prob);
+				//if (cellFree) probs[cellIndex] = 0.05;
+			}
+		}
+		rayIndex=castLength;
+	}
+	printf("Entropy to preprocess, prepare, raycast and calculate %i %i %i %i %.0f \n",preprocess,prepare,calculate,timer.getTime(),entropy);
 }
 
 //ultrafast grid update 
@@ -178,7 +253,7 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,int size)
 	unsigned char process[size];
 	bool subsample = true;
 	
-	memset(aux,0,sizeof(char));
+	memset(aux,0,numCells*sizeof(char));
 	//rescale ray intersections to match the grid
 	if (subsample == false){
 		//rescale all
@@ -199,7 +274,7 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,int size)
 			final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
 			if (aux[final] != 1){
 				aux[final] = 1;
-				probs[final] = 1;
+				probs[final] = 0.95;
 				process[i] = 1;
 			}
 		}
@@ -272,7 +347,7 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,int size)
 				//if (debug) printf("Index %06i %06i %06i %.2f %.2f %.2f %.2f\n",index,final,startIndex,bx,bx*rx+px,by*ry+py,bz*rz+pz);
 				if (aux[index] == 0){
 					aux[index] = 1;
-					probs[index] = 0;
+					probs[index] = 0.05;
 				}
 				if (bx < by && bx < bz)
 				{
