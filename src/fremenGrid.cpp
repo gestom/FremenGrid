@@ -16,11 +16,11 @@
 #include "fremen/Visualize.h"
 #include <std_msgs/String.h>
 
-#define MIN_X -10.0
-#define MIN_Y -10.0
+#define MIN_X  -7.0
+#define MIN_Y  -5.7 
 #define MIN_Z  0.0
-#define DIM_X 400 
-#define DIM_Y 400 
+#define DIM_X 300 
+#define DIM_Y 450 
 #define DIM_Z 80 
 #define RESOLUTION 0.05 
 
@@ -111,12 +111,15 @@ bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response
 	visualization_msgs::Marker markers;
 	geometry_msgs::Point cubeCenter;
 
+	/// set color
 	std_msgs::ColorRGBA m_color;
 	m_color.r = req.red;
 	m_color.g = req.green;
 	m_color.b = req.blue;
 	m_color.a = req.alpha;
+	markers.color = m_color;
 
+	/// set type, frame and size 
 	markers.header.frame_id = "/map";
 	markers.header.stamp = ros::Time::now();
 	markers.ns = req.name;
@@ -125,8 +128,12 @@ bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response
 	markers.scale.x = RESOLUTION;
 	markers.scale.y = RESOLUTION;
 	markers.scale.z = RESOLUTION;
-	markers.color = m_color;
 	markers.points.clear();
+
+	// prepare to iterate over the entire grid 
+	float minX = MIN_X;
+	float minY = MIN_Y;
+	float minZ = MIN_Z;
 	float maxX = MIN_X+DIM_X*RESOLUTION-3*RESOLUTION/4;
 	float maxY = MIN_Y+DIM_Y*RESOLUTION-3*RESOLUTION/4;
 	float maxZ = MIN_Z+DIM_Z*RESOLUTION-3*RESOLUTION/4;
@@ -135,17 +142,20 @@ bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response
 	float estimate,minP,maxP;
 	minP = req.minProbability;
 	maxP = req.maxProbability;
+	
+	//iterate over the cells' probabilities 
 	for(float z = MIN_Z;z<maxZ;z+=RESOLUTION){
 		for(float y = MIN_Y;y<maxY;y+=RESOLUTION){
 			for(float x = MIN_X;x<maxX;x+=RESOLUTION){
-				estimate = grid->estimate(cnt,0);
+				if (req.type == 0) estimate = grid->estimate(cnt,0);
+				if (req.type == 1) estimate = grid->aux[cnt];
+				
 				if(estimate > minP && estimate < maxP)
 				{
 					cubeCenter.x = x;
 					cubeCenter.y = y;
 					cubeCenter.z = z;
 					markers.points.push_back(cubeCenter);
-					//double h = (1.0 - fmin(fmax((z - MIN_Z) / (maxZ - MIN_Z), 0.0), 1.0)) * 0.7;
 					markers.colors.push_back(m_color);
 					cells++;
 				}
@@ -153,6 +163,8 @@ bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response
 			}
 		}
 	}
+
+	//publish results 
 	retrieve_publisher.publish(markers);
 	res.number = cells;
 	return true;
