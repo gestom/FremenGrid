@@ -53,7 +53,7 @@ bool saveGrid(fremen::SaveLoad::Request  &req, fremen::SaveLoad::Response &res)
 void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 {
 	CTimer timer;
-	if (integrateMeasurements > 0){
+	if (integrateMeasurements > 1){
 		timer.reset();
 		timer.start();
 		sensor_msgs::PointCloud points1,points;
@@ -93,11 +93,18 @@ void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 		printf("Grid updated %i \n",timer.getTime());	
 		integrateMeasurements--;
 	}
+	if (integrateMeasurements > 0)
+	{
+		integrateMeasurements--;
+		fremen::Visualize::Request req;
+		req.green = req.blue = 0.0;
+		req.red = req.alpha = 1.0;
+	}
 }
 
 bool addView(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 {
-	integrateMeasurements = 1;
+	integrateMeasurements = 2;
 	res.result = true;
 	return true;
 }
