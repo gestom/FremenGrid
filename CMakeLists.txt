@@ -9,7 +9,7 @@ set ( CMAKE_CXX_FLAGS "-Ofast -march=native -mno-avx -ggdb")
 include_directories(${OCTOMAP_INCLUDE_DIRS}) 
 link_libraries( ${OCTOMAP_LIBRARIES}) 
 
-add_action_files(FILES)
+#add_action_files(FILES)
 
 add_service_files(
 		FILES
@@ -30,6 +30,7 @@ include_directories(${catkin_INCLUDE_DIRS})
 
 
 add_executable(fremengrid src/fremenGrid.cpp)
+add_executable(exploration src/fremenExploration.cpp)
 
 add_library(frelement src/CFrelement.cpp)
 add_library(fremen_timer src/CTimer.cpp)
@@ -39,3 +40,5 @@ target_link_libraries(frelement fremen_timer)
 target_link_libraries(fremengridlib frelement)
 target_link_libraries(fremengrid fremengridlib)
 target_link_libraries(fremengrid ${catkin_LIBRARIES})
+
+target_link_libraries(exploration ${catkin_LIBRARIES})
