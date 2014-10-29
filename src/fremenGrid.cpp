@@ -98,11 +98,14 @@ void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 bool addView(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 {
 	integrateMeasurements = 1;
+    res.result=true;
+    return true;
 }
 
 bool estimateEntropy(fremen::Entropy::Request  &req, fremen::Entropy::Response &res)
 {
 	res.value = grid->getInformation(req.x,req.y,req.z,M_PI,0.4,req.r,req.t);
+    return true;
 }
 
 bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response &res)
