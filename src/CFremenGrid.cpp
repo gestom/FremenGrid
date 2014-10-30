@@ -291,9 +291,6 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,int size)
 	bool subsample = true;
 	float maxRange = 4.0;
 
-	px = x[size];
-	py = y[size];
-	pz = z[size];
 	/*if (isnormal(points.points[i].x) == 0)
 	{
 			rx = (x[i]-px);
@@ -330,6 +327,11 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,int size)
 	//raycast origin in float and int 
 	int i = 0;
 	//calculate the point of origin
+
+	px = x[size];
+	py = y[size];
+	pz = z[size];
+
 	//calculate the initial cell index
 	startIndex =  (int)px+xDim*((int)py+yDim*((int)pz));
 	int prepare  = 0;
