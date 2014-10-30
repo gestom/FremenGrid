@@ -16,12 +16,22 @@
 #include "fremen/Visualize.h"
 #include <std_msgs/String.h>
 
-#define MIN_X  -7.0
-#define MIN_Y  -5.7 
+#ifdef BHAM
+#define MIN_X  -18.2
+#define MIN_Y  -31.0 
 #define MIN_Z  0.0
-#define DIM_X 300 
-#define DIM_Y 450 
+#define DIM_X 560 
+#define DIM_Y 990 
+#define DIM_Z 60 
+#endif
+
+#define MIN_X  -5.8
+#define MIN_Y  -19.0 
+#define MIN_Z  0.0
+#define DIM_X 250 
+#define DIM_Y 500 
 #define DIM_Z 80 
+
 #define RESOLUTION 0.05 
 
 using namespace std;

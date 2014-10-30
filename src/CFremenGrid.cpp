@@ -112,10 +112,9 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float phiRange,floa
 	//precalculate raycasting structures
 	if (numRaycasters == 0)
 	{
-
-		px += offX;	
-		py += offY;	
-		pz += offZ;
+		px = floor(oX/resolution+xDim/2)+0.5;
+		py = floor(oY/resolution+yDim/2)+0.5;
+		pz = floor(oZ/resolution+zDim/2)+0.5;
 		numRaycasters = 0;
 		float *x = (float*)malloc(sizeof(float)*10000000);	
 		float *y = (float*)malloc(sizeof(float)*10000000);	
@@ -290,7 +289,17 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,int size)
 	int startIndex,ix,iy,iz,index,final,xStep,yStep,zStep;
 	unsigned char process[size];
 	bool subsample = true;
-	
+	float maxRange = 4.0;
+
+	px = x[size];
+	py = y[size];
+	pz = z[size];
+	/*if (isnormal(points.points[i].x) == 0)
+	{
+			rx = (x[i]-px);
+			ry = (y[i]-py);
+			rz = (z[i]-pz);
+	}*/
 	memset(aux,0,numCells*sizeof(char));
 	//rescale ray intersections to match the grid
 	if (subsample == false){
@@ -321,9 +330,6 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,int size)
 	//raycast origin in float and int 
 	int i = 0;
 	//calculate the point of origin
-	px = x[size];
-	py = y[size];
-	pz = z[size];
 	//calculate the initial cell index
 	startIndex =  (int)px+xDim*((int)py+yDim*((int)pz));
 	int prepare  = 0;
@@ -357,6 +363,9 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,int size)
 			//establish the first and last cell index 
 			index = startIndex;
 			final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
+			if (rx*rx+ry*ry+rz*rz > 16.0){
+				
+			}
 			//initialize values of the expected intersections
 			bx=by=bz=cx=cy=cz = xDim*yDim*zDim; //high enough to be outside of the grid
 
