@@ -20,7 +20,9 @@
 #include "fremen/Visualize.h"
 #include <std_msgs/String.h>
 
-#ifdef BHAM
+#define UOL_SMALL 
+
+#ifdef BHAM_LARGE
 #define MIN_X  -18.2
 #define MIN_Y  -31.0 
 #define MIN_Z  0.0
@@ -29,12 +31,24 @@
 #define DIM_Z 60 
 #endif
 
+#ifdef BHAM_SMALL
 #define MIN_X  -5.8
 #define MIN_Y  -19.0 
 #define MIN_Z  0.0
 #define DIM_X 250 
 #define DIM_Y 500 
 #define DIM_Z 80 
+#endif
+
+#ifdef UOL_SMALL 
+#define MIN_X  -7
+#define MIN_Y  -5.6 
+#define MIN_Z  0.0
+#define DIM_X 280 
+#define DIM_Y 450 
+#define DIM_Z 80 
+#endif
+
 #define CAMERA_RANGE 4.0 
 
 #define RESOLUTION 0.05 
