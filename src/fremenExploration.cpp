@@ -23,7 +23,7 @@
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
 using namespace std;
-bool ptuMovementFinished = true;
+int ptuMovementFinished = 0;
 
 struct entropy_keypoint{
     float x;
@@ -41,7 +41,7 @@ sensor_msgs::JointState ptu;
 
 void movePtu(float pan,float tilt)
 {
-	ptuMovementFinished = false;
+	ptuMovementFinished = 0;
 	ptu.name[0] ="pan";
 	ptu.name[1] ="tilt";
 	ptu.position[0] = pan;
@@ -54,8 +54,8 @@ void ptuCallback(const sensor_msgs::JointState::ConstPtr &msg)
 {
 	for (int i = 0;i<3;i++){
 		if (msg->name[i] == "pan"){
-			//printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
-			if (fabs(msg->position[i]-ptu.position[0])<0.01) ptuMovementFinished = true;
+//			printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
+			if (fabs(msg->position[i]-ptu.position[0])<0.01) ptuMovementFinished++;
 		}
 	}
 }
@@ -166,7 +166,7 @@ int main(int argc,char *argv[])
 	    while (ros::ok() && ptuAngle < M_PI)
 	    {
 		    measure_srv.request.stamp = 0.0;
-		    if (ptuMovementFinished){
+		    if (ptuMovementFinished > 10){
 			    if(measure_client.call(measure_srv))
 			    {
 				    ROS_INFO("Measure added to grid!");
@@ -177,7 +177,7 @@ int main(int argc,char *argv[])
 				    return 1;
 			    }
 			    ptuAngle += ptuSweepStep; 
-			    usleep(100000);
+			    usleep(500000);
 			    movePtu(ptuAngle,0);
 			    usleep(100000);
 
@@ -224,6 +224,13 @@ int main(int argc,char *argv[])
                 grid[i].x = x;
                 grid[i].y = y;
 
+		    for(float i = 0; i < 2*M_PI; i+= 2*M_PI/nr_points)
+		    {
+			    entropy_srv.request.x = position.x + exploration_radius * cos(i);
+			    entropy_srv.request.y = position.y + exploration_radius * sin(i);
+			    entropy_srv.request.z = 1.69;
+			    entropy_srv.request.r = 4;
+			    entropy_srv.request.t = 0.0;
 
                 //Service Request Initialization:
                 entropy_srv.request.x = x;
@@ -232,6 +239,17 @@ int main(int argc,char *argv[])
                 entropy_srv.request.r = 4;
                 entropy_srv.request.t = 0.0;
 
+			    //Entropy Srv
+			    if(entropy_client.call(entropy_srv)>0)
+			    {
+				    ROS_INFO("Entropy at Point (%f,%f) is %.3f", entropy_srv.request.x, entropy_srv.request.y, entropy_srv.response.value);
+				    new_entropy = entropy_srv.response.value;
+			    }
+			    else
+			    {
+				    ROS_ERROR("Failed to call entropy service");
+				    return 1;
+			    }
 
                 //Entropy Service Call:
                 if(entropy_client.call(entropy_srv)>0)
@@ -239,68 +257,39 @@ int main(int argc,char *argv[])
                     //Save values for planning
                     grid[i].value = entropy_srv.response.value;
 
-                    //Add test point (size of the marker depends on the entropy value)
-                    test_point.pose.position.x = x;
-                    test_point.pose.position.y = y;
-                    test_point.id = i;
-                    test_point.scale.x = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
-                    test_point.scale.y = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
-                    points_markers.markers.push_back(test_point);
+			    if(new_entropy > old_entropy)
+			    {
+				    old_entropy = new_entropy;
+				    //                    ROS_ERROR("here!");
+				    next_position.x = entropy_srv.request.x;
+				    next_position.y = entropy_srv.request.y;
+				    next_position.z = entropy_srv.request.z;
 
-                    //Add text position  and value
-                    text_point.pose.position.x = x;
-                    text_point.pose.position.y = y;
-                    sprintf(output,"%.3f",entropy_srv.response.value);
-                    text_point.text = output;
-                    text_point.id = i;
-                    values_markers.markers.push_back(text_point);
+			    }
 
-                    //Next coordinates:
-                    x += entropy_step;
-                    if(x > (MIN_X + DIM_X*RESOLUTION - entropy_step))
-                    {
-                        x = MIN_X + entropy_step;
-                        y += entropy_step;
-                    }
+		    }
 
-                }
-                else
-                {
-                    ROS_ERROR("Failed to call entropy service!");
-                    return 1;
-                }
-            }
+		    //Move Base
+		    ROS_INFO("Moving to point (%f,%f)...", next_position.x, next_position.y);
+		    goal.target_pose.header.stamp = ros::Time::now();
+		    goal.target_pose.pose.position.x = next_position.x;
+		    goal.target_pose.pose.position.y = next_position.y;
+		    goal.target_pose.pose.orientation.w = 1.0;
 
-            //Publish Visualization Markers
-            points_pub.publish(points_markers);
-            text_pub.publish(values_markers);
-            ros::spinOnce();
+		    ac.sendGoal(goal);
+		    ac.waitForResult();
 
-		    position.x = st.getOrigin().x();
-		    position.y = st.getOrigin().y();
-
-
-//		    //Move Base
-//		    ROS_INFO("Moving to point (%f,%f)...", next_position.x, next_position.y);
-//		    goal.target_pose.header.stamp = ros::Time::now();
-//		    goal.target_pose.pose.position.x = next_position.x;
-//		    goal.target_pose.pose.position.y = next_position.y;
-//		    goal.target_pose.pose.orientation.w = 1.0;
-
-//		    ac.sendGoal(goal);
-//		    ac.waitForResult();
-
-//		    if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
-//			    ROS_INFO("Hooray!");
-//		    else
-//			    ROS_INFO("The base failed to move for some reason");
+		    if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
+			    ROS_INFO("Hooray!");
+		    else
+			    ROS_INFO("The base failed to move for some reason");
 
 	    }
 	    catch (tf::TransformException ex) {
 		    ROS_ERROR("FreMeEn map cound not incorporate the latest measurements %s",ex.what());
 		    return 0;
 	    }
-	   ros::spin();
+	    ros::spin();
     }
 
     return 0;
