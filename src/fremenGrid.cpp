@@ -7,6 +7,10 @@
 #include <geometry_msgs/Point.h>
 #include <std_msgs/ColorRGBA.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <image_transport/image_transport.h>
+#include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/Image.h>
+
 #include "CFremenGrid.h"
 #include "CTimer.h"
 
@@ -63,7 +67,7 @@ bool saveGrid(fremen::SaveLoad::Request  &req, fremen::SaveLoad::Response &res)
 void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 {
 	CTimer timer;
-	if (integrateMeasurements > 1){
+	if (integrateMeasurements == 2){
 		timer.reset();
 		timer.start();
 		sensor_msgs::PointCloud points1,points;
@@ -83,7 +87,7 @@ void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 		int size=points.points.size();
 		std::cout << "There are " << size << " fields." << std::endl;
 		std::cout << "Point " << st.getOrigin().x() << " " <<  st.getOrigin().y() << " " << st.getOrigin().z() << " " << std::endl;
-		float x[size+1],y[size+1],z[size+1];
+		float x[size+1],y[size+1],z[size+1],d[size+1];
 		int last = 0;
 		for(unsigned int i = 0; i < size; i++){
 			if (isnormal(points.points[i].x) > 0)
@@ -91,6 +95,7 @@ void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 				x[last] = points.points[i].x; 
 				y[last] = points.points[i].y;
 				z[last] = points.points[i].z;
+				d[last] = 1;
 				last++;
 			}
 		}
@@ -99,7 +104,7 @@ void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 		z[last] = st.getOrigin().z();
 		printf("Point cloud processed %i \n",timer.getTime());
 		timer.reset();	
-		grid->incorporate(x,y,z,last);
+		grid->incorporate(x,y,z,d,last);
 		printf("Grid updated %i \n",timer.getTime());	
 		integrateMeasurements--;
 	}
@@ -115,6 +120,13 @@ void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 bool addView(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 {
 	integrateMeasurements = 2;
+	res.result = true;
+	return true;
+}
+
+bool addDepth(fremen::AddView::Request  &req, fremen::AddView::Response &res)
+{
+	integrateMeasurements = 3;
 	res.result = true;
 	return true;
 }
@@ -190,25 +202,91 @@ bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response
 	return true;
 }
 
+
+void imageCallback(const sensor_msgs::ImageConstPtr& msg)
+{
+	float depth = msg->data[640*480+640]+256*msg->data[640*480+640+1];
+	int len =  msg->height*msg->width;
+	float vx = 1/570.0; 
+	float vy = 1/570.0; 
+	float cx = -320.5;
+	float cy = -240.5;
+	int width = msg->width;
+	int height = msg->height;
+	float fx = (1+cx)*vx;
+	float fy = (1+cy)*vy;
+	float lx = (width+cx)*vx;
+	float ly = (height+cy)*vy;
+	float x[len+1];
+	float y[len+1];
+	float z[len+1];
+	float d[len+1];
+	float di,psi,phi,phiPtu,psiPtu,xPtu,yPtu,zPtu;
+	int cnt = 0;
+	di=psi=phi=phiPtu=psiPtu=xPtu=yPtu=zPtu=0;
+
+	if (integrateMeasurements == 3)
+	{
+		tf::StampedTransform st;
+		try {
+			tf_listener->waitForTransform("/map","/head_xtion_depth_optical_frame",msg->header.stamp, ros::Duration(0.2));
+			tf_listener->lookupTransform("/map","/head_xtion_depth_optical_frame",msg->header.stamp,st);
+		}
+		catch (tf::TransformException ex) {
+			ROS_ERROR("FreMEn map cound not incorporate the latest depth map %s",ex.what());
+			return;
+		}
+		x[len] = st.getOrigin().x();
+		y[len] = st.getOrigin().y();
+		z[len] = st.getOrigin().z();
+
+		for (float h = fy;h<ly;h+=vy)
+		{
+			psi = atan2(h,1)+psiPtu;
+			for (float w = fx;w<lx;w+=vx)
+			{
+				phi = atan2(w,1)+phiPtu;
+				di = msg->data[cnt*2]+256*msg->data[cnt*2+1];
+				d[cnt] = 0;
+				if (di == 0){
+					di = 1;
+					d[cnt] = 0;
+				}
+				x[cnt] = cos(phi)*di+xPtu;
+				y[cnt] = sin(phi)*di+yPtu;
+				z[cnt] = sin(psi)*di+zPtu;
+				cnt++;	
+			}
+		}
+		grid->incorporate(x,y,z,d,len);
+		//printf("Grid updated %i \n",timer.getTime());	
+		integrateMeasurements=0;
+		printf("XXX: %i %i %i %i %s %.3f\n",len,cnt,msg->width,msg->height,msg->encoding.c_str(),depth);
+	}
+}
+
 int main(int argc,char *argv[])
 {
     ros::init(argc, argv, "fremengrid");
     ros::NodeHandle n;
     grid = new CFremenGrid(MIN_X,MIN_Y,MIN_Z,DIM_X,DIM_Y,DIM_Z,RESOLUTION);
     tf_listener    = new tf::TransformListener();
+    image_transport::ImageTransport imageTransporter(n); 
 
     ros::Time now = ros::Time(0);
     tf_listener->waitForTransform("/head_xtion_depth_optical_frame","/map",now, ros::Duration(3.0));
     ROS_INFO("Fremen grid start");
 
     //Subscribers:
-    ros::Subscriber sub = n.subscribe<sensor_msgs::PointCloud2> ("/head_xtion/depth/points",  1000, points);
+    ros::Subscriber point_subscriber = n.subscribe<sensor_msgs::PointCloud2> ("/head_xtion/depth/points",  1000, points);
+    image_transport::Subscriber image_subscriber = imageTransporter.subscribe("/head_xtion/depth/image_raw", 1, imageCallback);
     retrieve_publisher = n.advertise<visualization_msgs::Marker>("/fremenGrid/visCells", 100);
 
     //Services:
     ros::ServiceServer retrieve_service = n.advertiseService("/fremenGrid/visualize", visualizeGrid);
     ros::ServiceServer information_gain = n.advertiseService("/fremenGrid/entropy", estimateEntropy);
     ros::ServiceServer add_service = n.advertiseService("/fremenGrid/measure", addView);
+    ros::ServiceServer depth_service = n.advertiseService("/fremenGrid/depth", addDepth);
     ros::ServiceServer save_service = n.advertiseService("/fremenGrid/save", saveGrid);
     ros::ServiceServer load_service = n.advertiseService("/fremenGrid/load", loadGrid);
 

@@ -279,7 +279,7 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float phiRange,floa
 }
 
 //ultrafast grid update 
-void CFremenGrid::incorporate(float *x,float *y,float *z,int size)
+void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 {
 	CTimer timer;
 	timer.reset();
