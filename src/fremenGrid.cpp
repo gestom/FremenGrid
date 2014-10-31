@@ -109,7 +109,7 @@ void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 		printf("Grid updated %i \n",timer.getTime());	
 		integrateMeasurements--;
 	}
-	if (integrateMeasurements > 0)
+	if (integrateMeasurements == 1)
 	{
 		integrateMeasurements--;
 		fremen::Visualize::Request req;
@@ -128,9 +128,6 @@ bool addView(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 bool addDepth(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 {
 	integrateMeasurements = 3;
-	while (integrateMeasurements != 0){
-		sleep(50000);
-	}
 	res.result = true;
 	return true;
 }
@@ -233,7 +230,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 	{
 		tf::StampedTransform st;
 		try {
-			tf_listener->waitForTransform("/map","/head_xtion_depth_optical_frame",msg->header.stamp, ros::Duration(0.2));
+			tf_listener->waitForTransform("/map","/head_xtion_depth_optical_frame",msg->header.stamp, ros::Duration(0.5));
 			tf_listener->lookupTransform("/map","/head_xtion_depth_optical_frame",msg->header.stamp,st);
 		}
 		catch (tf::TransformException ex) {

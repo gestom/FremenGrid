@@ -13,7 +13,7 @@
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
 using namespace std;
-bool ptuMovementFinished = true;
+int ptuMovementFinished = 0;
 
 //Parameteres
 double exploration_radius;//just for a initial planning
@@ -23,7 +23,7 @@ sensor_msgs::JointState ptu;
 
 void movePtu(float pan,float tilt)
 {
-	ptuMovementFinished = false;
+	ptuMovementFinished = 0;
 	ptu.name[0] ="pan";
 	ptu.name[1] ="tilt";
 	ptu.position[0] = pan;
@@ -36,8 +36,8 @@ void ptuCallback(const sensor_msgs::JointState::ConstPtr &msg)
 {
 	for (int i = 0;i<3;i++){
 		if (msg->name[i] == "pan"){
-			//printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
-			if (fabs(msg->position[i]-ptu.position[0])<0.01) ptuMovementFinished = true;
+//			printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
+			if (fabs(msg->position[i]-ptu.position[0])<0.01) ptuMovementFinished++;
 		}
 	}
 }
@@ -100,7 +100,7 @@ int main(int argc,char *argv[])
 	    while (ros::ok() && ptuAngle < M_PI)
 	    {
 		    measure_srv.request.stamp = 0.0;
-		    if (ptuMovementFinished){
+		    if (ptuMovementFinished > 10){
 			    if(measure_client.call(measure_srv))
 			    {
 				    ROS_INFO("Measure added to grid!");
@@ -111,7 +111,7 @@ int main(int argc,char *argv[])
 				    return 1;
 			    }
 			    ptuAngle += ptuSweepStep; 
-			    usleep(100000);
+			    usleep(500000);
 			    movePtu(ptuAngle,0);
 			    visualize_srv.request.red = visualize_srv.request.blue = 0.0;
 			    visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
