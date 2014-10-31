@@ -29,7 +29,7 @@ class CFremenGrid
 		bool load(const char*name);
 
 		float estimate(unsigned int index,float timeStamp);
-		void incorporate(float *x,float *y,float *z,int size);
+		void incorporate(float *x,float *y,float *z,float *d,int size);
 		int getIndex(float x,float y,float z);
 
 		//center of the first cell

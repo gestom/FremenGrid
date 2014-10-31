@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(fremen)
 
 
-find_package(catkin REQUIRED COMPONENTS  pcl_conversions pcl_ros roscpp rospy std_msgs visualization_msgs geometry_msgs genmsg sensor_msgs)
+find_package(catkin REQUIRED COMPONENTS  pcl_conversions pcl_ros roscpp rospy std_msgs visualization_msgs geometry_msgs genmsg sensor_msgs image_transport)
 set ( CMAKE_CXX_FLAGS "-Ofast -march=native -mno-avx -ggdb")
 #set ( CMAKE_CXX_FLAGS "-ggdb")
 
