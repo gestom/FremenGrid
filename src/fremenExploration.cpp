@@ -36,7 +36,7 @@ void ptuCallback(const sensor_msgs::JointState::ConstPtr &msg)
 {
 	for (int i = 0;i<3;i++){
 		if (msg->name[i] == "pan"){
-			printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
+			//printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
 			if (fabs(msg->position[i]-ptu.position[0])<0.01) ptuMovementFinished = true;
 		}
 	}
@@ -81,7 +81,7 @@ int main(int argc,char *argv[])
     fremen::Entropy entropy_srv;
 
     //measure service client
-    ros::ServiceClient measure_client = n.serviceClient<fremen::AddView>("/fremenGrid/measure");
+    ros::ServiceClient measure_client = n.serviceClient<fremen::AddView>("/fremenGrid/depth");
     fremen::AddView measure_srv;
 
     //move_base client
@@ -111,9 +111,8 @@ int main(int argc,char *argv[])
 				    return 1;
 			    }
 			    ptuAngle += ptuSweepStep; 
-			    movePtu(ptuAngle,0);
 			    usleep(100000);
-
+			    movePtu(ptuAngle,0);
 			    visualize_srv.request.red = visualize_srv.request.blue = 0.0;
 			    visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
 			    visualize_srv.request.minProbability = 0.9;
@@ -121,6 +120,7 @@ int main(int argc,char *argv[])
 			    visualize_srv.request.name = "occupied";
 			    visualize_srv.request.type = 0;
 			    visualize_client.call(visualize_srv);
+			    ros::spinOnce();
 			    usleep(100000);
 
 			    visualize_srv.request.green = 0.0;
@@ -131,13 +131,16 @@ int main(int argc,char *argv[])
 			    visualize_srv.request.name = "free";
 			    visualize_srv.request.type = 0;
 			    visualize_client.call(visualize_srv);
+			    ros::spinOnce();
+			    usleep(100000);
+
+
 
 		    }
 		    ros::spinOnce();
 	    }
 	    ptuAngle = 0;
 	    movePtu(ptuAngle,0);
-
 	    try {
 		    tf_listener.waitForTransform("/map","/base_link",ros::Time::now(), ros::Duration(2));
 		    tf_listener.lookupTransform("/map","/base_link",ros::Time(0),st);
@@ -201,7 +204,7 @@ int main(int argc,char *argv[])
 		    ROS_ERROR("FreMeEn map cound not incorporate the latest measurements %s",ex.what());
 		    return 0;
 	    }
-	   ros::spin();
+	    ros::spin();
     }
 
     return 0;

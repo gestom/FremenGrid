@@ -35,6 +35,7 @@
 #define DIM_X 250 
 #define DIM_Y 500 
 #define DIM_Z 80 
+#define CAMERA_RANGE 4.0 
 
 #define RESOLUTION 0.05 
 
@@ -67,14 +68,14 @@ bool saveGrid(fremen::SaveLoad::Request  &req, fremen::SaveLoad::Response &res)
 void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 {
 	CTimer timer;
-	if (integrateMeasurements == 2){
+	if (integrateMeasurements == 20){
 		timer.reset();
 		timer.start();
 		sensor_msgs::PointCloud points1,points;
 		sensor_msgs::convertPointCloud2ToPointCloud(*points2,points1);
 		tf::StampedTransform st;
 		try {
-			tf_listener->waitForTransform("/map","/head_xtion_depth_optical_frame",points2->header.stamp, ros::Duration(0.2));
+			tf_listener->waitForTransform("/map","/head_xtion_depth_optical_frame",points2->header.stamp, ros::Duration(0.5));
 			tf_listener->lookupTransform("/map","/head_xtion_depth_optical_frame",points2->header.stamp,st);
 		}
 		catch (tf::TransformException ex) {
@@ -127,6 +128,9 @@ bool addView(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 bool addDepth(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 {
 	integrateMeasurements = 3;
+	while (integrateMeasurements != 0){
+		sleep(50000);
+	}
 	res.result = true;
 	return true;
 }
@@ -221,7 +225,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 	float y[len+1];
 	float z[len+1];
 	float d[len+1];
-	float di,psi,phi,phiPtu,psiPtu,xPtu,yPtu,zPtu;
+	float di,psi,phi,phiPtu,psiPtu,xPtu,yPtu,zPtu,ix,iy,iz;
 	int cnt = 0;
 	di=psi=phi=phiPtu=psiPtu=xPtu=yPtu=zPtu=0;
 
@@ -236,25 +240,32 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 			ROS_ERROR("FreMEn map cound not incorporate the latest depth map %s",ex.what());
 			return;
 		}
-		x[len] = st.getOrigin().x();
-		y[len] = st.getOrigin().y();
-		z[len] = st.getOrigin().z();
-
+		x[len] = xPtu = st.getOrigin().x();
+		y[len] = yPtu = st.getOrigin().y();
+		z[len] = zPtu = st.getOrigin().z();
+		double a,b,c;	
+		tf::Matrix3x3  rot = st.getBasis();
+		rot.getEulerYPR(a,b,c,1);
+		printf("%.3f %.3f %.3f\n",a,b,c);
+		phi = a-c;
+		psi = b;
 		for (float h = fy;h<ly;h+=vy)
 		{
-			psi = atan2(h,1)+psiPtu;
 			for (float w = fx;w<lx;w+=vx)
 			{
-				phi = atan2(w,1)+phiPtu;
-				di = msg->data[cnt*2]+256*msg->data[cnt*2+1];
-				d[cnt] = 0;
-				if (di == 0){
-					di = 1;
+				di = (msg->data[cnt*2]+256*msg->data[cnt*2+1])/1000.0;
+				//printf("%f.3\n",di);
+				d[cnt] = 1;
+				if (di < 0.05){
+					di = CAMERA_RANGE;
 					d[cnt] = 0;
 				}
-				x[cnt] = cos(phi)*di+xPtu;
-				y[cnt] = sin(phi)*di+yPtu;
-				z[cnt] = sin(psi)*di+zPtu;
+				ix = di;
+				iy = -w*di;
+				iz = -h*di;
+				x[cnt] = cos(phi)*ix-sin(phi)*iy+xPtu;
+				y[cnt] = sin(phi)*ix+cos(phi)*iy+yPtu;
+				z[cnt] = iz+zPtu;
 				cnt++;	
 			}
 		}
@@ -285,7 +296,7 @@ int main(int argc,char *argv[])
     //Services:
     ros::ServiceServer retrieve_service = n.advertiseService("/fremenGrid/visualize", visualizeGrid);
     ros::ServiceServer information_gain = n.advertiseService("/fremenGrid/entropy", estimateEntropy);
-    ros::ServiceServer add_service = n.advertiseService("/fremenGrid/measure", addView);
+//    ros::ServiceServer add_service = n.advertiseService("/fremenGrid/measure", addView);
     ros::ServiceServer depth_service = n.advertiseService("/fremenGrid/depth", addDepth);
     ros::ServiceServer save_service = n.advertiseService("/fremenGrid/save", saveGrid);
     ros::ServiceServer load_service = n.advertiseService("/fremenGrid/load", loadGrid);
