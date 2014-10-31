@@ -10,14 +10,25 @@
 #include "fremen/AddView.h"
 #include "fremen/Visualize.h"
 
+#define MIN_X  -5.8
+#define MIN_Y  -19.0
+#define MIN_Z  0.0
+#define DIM_X 250
+#define DIM_Y 500
+#define DIM_Z 80
+#define RESOLUTION 0.05
+
+#define MAX_ENTROPY 132000
+
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
 using namespace std;
 bool ptuMovementFinished = true;
 
-//Parameteres
-double exploration_radius;//just for a initial planning
+//Parameters
+double exploration_radius, entropy_step;
 int nr_points;
+
 ros::Publisher ptu_pub;
 sensor_msgs::JointState ptu;
 
@@ -50,6 +61,7 @@ int main(int argc,char *argv[])
     ros::NodeHandle nh("~");
     nh.param("exploration_radius", exploration_radius, 2.0);
     nh.param("nr_points", nr_points, 12);
+    nh.param("interval", entropy_step, 1.0);
 
     //tell the action client that we want to spin a thread by default
     MoveBaseClient ac("move_base", true);
@@ -58,10 +70,9 @@ int main(int argc,char *argv[])
 
     tf::TransformListener tf_listener;
 
-    //Publisher
-    ros::Publisher testPts_pub = n.advertise<visualization_msgs::Marker>("/test_points", 100);
-    ros::Publisher testEntropy_pub = n.advertise<visualization_msgs::MarkerArray>("/entropy_test", 100);
-  
+    //Publisher (Visualization of Points + Entropy Values)
+    ros::Publisher points_pub = n.advertise<visualization_msgs::MarkerArray>("/entropy_points", 100);
+    ros::Publisher text_pub = n.advertise<visualization_msgs::MarkerArray>("/entropy_values", 100);
 
     ptu.name.resize(2);
     ptu.position.resize(2);
@@ -72,25 +83,64 @@ int main(int argc,char *argv[])
 
     ros::Subscriber ptu_sub = n.subscribe("/ptu/state", 10, ptuCallback);
 
-    //entropy service client
+    //Entropy Client
     ros::ServiceClient entropy_client = n.serviceClient<fremen::Entropy>("/fremenGrid/entropy");
-    fremen::Visualize visualize_srv;
-
-    //vizualize client
-    ros::ServiceClient visualize_client = n.serviceClient<fremen::Visualize>("/fremenGrid/visualize");
     fremen::Entropy entropy_srv;
 
-    //measure service client
+    //Vizualize Client
+    ros::ServiceClient visualize_client = n.serviceClient<fremen::Visualize>("/fremenGrid/visualize");
+    fremen::Visualize visualize_srv;
+
+    //Measure Client
     ros::ServiceClient measure_client = n.serviceClient<fremen::AddView>("/fremenGrid/measure");
     fremen::AddView measure_srv;
 
-    //move_base client
+    //Move_Base Client
     move_base_msgs::MoveBaseGoal goal;
     goal.target_pose.header.frame_id = "/map";
 
     //get robot pose
     tf::StampedTransform st;
 
+    //Markers Initialization
+    visualization_msgs::MarkerArray points_markers, values_markers;
+
+    visualization_msgs::Marker test_point;
+    test_point.header.frame_id = "/map";
+    test_point.header.stamp = ros::Time::now();
+    test_point.ns = "my_namespace";
+    test_point.action = visualization_msgs::Marker::ADD;
+    test_point.type = visualization_msgs::Marker::SPHERE;
+    test_point.scale.x = 0.3;
+    test_point.scale.y = 0.3;
+    test_point.scale.z = 0.3;
+    test_point.color.a = 0.6;
+    test_point.color.r = 0.1;
+    test_point.color.g = 0.0;
+    test_point.color.b = 1.0;
+    test_point.pose.position.z = 0.1;
+    test_point.pose.orientation.w = 1.0;
+
+    visualization_msgs::Marker text_point;
+    text_point.header.frame_id = "/map";
+    text_point.header.stamp = ros::Time::now();
+    text_point.ns = "my_namespace";
+    text_point.action = visualization_msgs::Marker::ADD;
+    text_point.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+    text_point.scale.z = 0.1;
+    text_point.color.a = 1.0;
+    text_point.color.r = 1.0;
+    text_point.color.g = 1.0;
+    text_point.color.b = 1.0;
+    text_point.pose.position.z = 0.1;
+    text_point.pose.orientation.w = 1.0;
+
+    //Entropy Grid
+    unsigned int nr_x, nr_y;
+    nr_x = ((DIM_X*RESOLUTION-entropy_step)/entropy_step);
+    nr_y = ((DIM_Y*RESOLUTION-entropy_step)/entropy_step);
+
+    //PTU:
     float ptuSweepStep = 2.0*M_PI/7.0;
     float ptuAngle = -3*ptuSweepStep;
     sleep(1);
