@@ -47,7 +47,7 @@ void ptuCallback(const sensor_msgs::JointState::ConstPtr &msg)
 {
 	for (int i = 0;i<3;i++){
 		if (msg->name[i] == "pan"){
-			printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
+			//printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
 			if (fabs(msg->position[i]-ptu.position[0])<0.01) ptuMovementFinished = true;
 		}
 	}
@@ -161,6 +161,7 @@ int main(int argc,char *argv[])
 				    return 1;
 			    }
 			    ptuAngle += ptuSweepStep; 
+			    usleep(100000);
 			    movePtu(ptuAngle,0);
 			    usleep(100000);
 
@@ -171,6 +172,7 @@ int main(int argc,char *argv[])
 			    visualize_srv.request.name = "occupied";
 			    visualize_srv.request.type = 0;
 			    visualize_client.call(visualize_srv);
+			    ros::spinOnce();
 			    usleep(100000);
 
 			    visualize_srv.request.green = 0.0;
@@ -181,6 +183,10 @@ int main(int argc,char *argv[])
 			    visualize_srv.request.name = "free";
 			    visualize_srv.request.type = 0;
 			    visualize_client.call(visualize_srv);
+			    ros::spinOnce();
+			    usleep(100000);
+
+
 
 		    }
 		    ros::spinOnce();

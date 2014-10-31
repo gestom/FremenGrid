@@ -318,7 +318,7 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 			final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
 			if (aux[final] != 1){
 				aux[final] = 1;
-				probs[final] = 0.95;
+				if (d[i]==1) probs[final] = 0.95; else probs[final] = 0.05;
 				process[i] = 1;
 			}
 		}
@@ -365,9 +365,6 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 			//establish the first and last cell index 
 			index = startIndex;
 			final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
-			if (rx*rx+ry*ry+rz*rz > 16.0){
-				
-			}
 			//initialize values of the expected intersections
 			bx=by=bz=cx=cy=cz = xDim*yDim*zDim; //high enough to be outside of the grid
 
