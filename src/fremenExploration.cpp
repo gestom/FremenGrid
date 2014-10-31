@@ -97,6 +97,8 @@ int main(int argc,char *argv[])
     movePtu(ptuAngle,0);
     usleep(10000);
     while (ros::ok()){
+	    ptuAngle = -3*ptuSweepStep;
+	    movePtu(ptuAngle,0);
 	    while (ros::ok() && ptuAngle < M_PI)
 	    {
 		    measure_srv.request.stamp = 0.0;
