@@ -75,7 +75,7 @@ void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 		sensor_msgs::convertPointCloud2ToPointCloud(*points2,points1);
 		tf::StampedTransform st;
 		try {
-			tf_listener->waitForTransform("/map","/head_xtion_depth_optical_frame",points2->header.stamp, ros::Duration(0.5));
+			tf_listener->waitForTransform("/map","/head_xtion_depth_optical_frame",points2->header.stamp, ros::Duration(1.0));
 			tf_listener->lookupTransform("/map","/head_xtion_depth_optical_frame",points2->header.stamp,st);
 		}
 		catch (tf::TransformException ex) {

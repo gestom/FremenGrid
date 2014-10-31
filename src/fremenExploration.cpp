@@ -204,7 +204,7 @@ int main(int argc,char *argv[])
 		    ROS_ERROR("FreMeEn map cound not incorporate the latest measurements %s",ex.what());
 		    return 0;
 	    }
-	    ros::spin();
+	    ros::spinOnce();
     }
 
     return 0;
