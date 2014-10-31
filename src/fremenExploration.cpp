@@ -25,6 +25,13 @@ typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseCl
 using namespace std;
 bool ptuMovementFinished = true;
 
+struct entropy_keypoint{
+    float x;
+    float y;
+    float value;
+    int reachable;
+};
+
 //Parameters
 double exploration_radius, entropy_step;
 int nr_points;
@@ -140,12 +147,21 @@ int main(int argc,char *argv[])
     nr_x = ((DIM_X*RESOLUTION-entropy_step)/entropy_step);
     nr_y = ((DIM_Y*RESOLUTION-entropy_step)/entropy_step);
 
+    entropy_keypoint grid[nr_x*nr_y];
+
+    for(int i = 0; i < nr_x*nr_y; i++)
+        grid[i].reachable = 0;
+
+    char output[1000];
+
+
     //PTU:
     float ptuSweepStep = 2.0*M_PI/7.0;
     float ptuAngle = -3*ptuSweepStep;
     sleep(1);
     movePtu(ptuAngle,0);
     usleep(10000);
+
     while (ros::ok()){
 	    while (ros::ok() && ptuAngle < M_PI)
 	    {
@@ -191,6 +207,7 @@ int main(int argc,char *argv[])
 		    }
 		    ros::spinOnce();
 	    }
+
 	    ptuAngle = 0;
 	    movePtu(ptuAngle,0);
 
@@ -198,59 +215,85 @@ int main(int argc,char *argv[])
 		    tf_listener.waitForTransform("/map","/base_link",ros::Time::now(), ros::Duration(2));
 		    tf_listener.lookupTransform("/map","/base_link",ros::Time(0),st);
 
+            //Initial coordinates:
+            float x = MIN_X+entropy_step;
+            float y = MIN_Y+entropy_step;
+
+            for(int i = 0; i < nr_x * nr_y; i++)
+            {
+                grid[i].x = x;
+                grid[i].y = y;
+
+
+                //Service Request Initialization:
+                entropy_srv.request.x = x;
+                entropy_srv.request.y = y;
+                entropy_srv.request.z = 1.69;
+                entropy_srv.request.r = 4;
+                entropy_srv.request.t = 0.0;
+
+
+                //Entropy Service Call:
+                if(entropy_client.call(entropy_srv)>0)
+                {
+                    //Save values for planning
+                    grid[i].value = entropy_srv.response.value;
+
+                    //Add test point (size of the marker depends on the entropy value)
+                    test_point.pose.position.x = x;
+                    test_point.pose.position.y = y;
+                    test_point.id = i;
+                    test_point.scale.x = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+                    test_point.scale.y = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+                    points_markers.markers.push_back(test_point);
+
+                    //Add text position  and value
+                    text_point.pose.position.x = x;
+                    text_point.pose.position.y = y;
+                    sprintf(output,"%.3f",entropy_srv.response.value);
+                    text_point.text = output;
+                    text_point.id = i;
+                    values_markers.markers.push_back(text_point);
+
+                    //Next coordinates:
+                    x += entropy_step;
+                    if(x > (MIN_X + DIM_X*RESOLUTION - entropy_step))
+                    {
+                        x = MIN_X + entropy_step;
+                        y += entropy_step;
+                    }
+
+                }
+                else
+                {
+                    ROS_ERROR("Failed to call entropy service!");
+                    return 1;
+                }
+            }
+
+            //Publish Visualization Markers
+            points_pub.publish(points_markers);
+            text_pub.publish(values_markers);
+            ros::spinOnce();
+
 		    position.x = st.getOrigin().x();
 		    position.y = st.getOrigin().y();
 
-		    float new_entropy = 0.0, old_entropy = 0.0;
 
-		    for(float i = 0; i < 2*M_PI; i+= 2*M_PI/nr_points)
-		    {
-			    entropy_srv.request.x = position.x + exploration_radius * cos(i);
-			    entropy_srv.request.y = position.y + exploration_radius * sin(i);
-			    entropy_srv.request.z = 1.69;
-			    entropy_srv.request.r = 4;
-			    entropy_srv.request.t = 0.0;
+//		    //Move Base
+//		    ROS_INFO("Moving to point (%f,%f)...", next_position.x, next_position.y);
+//		    goal.target_pose.header.stamp = ros::Time::now();
+//		    goal.target_pose.pose.position.x = next_position.x;
+//		    goal.target_pose.pose.position.y = next_position.y;
+//		    goal.target_pose.pose.orientation.w = 1.0;
 
+//		    ac.sendGoal(goal);
+//		    ac.waitForResult();
 
-			    //Entropy Srv
-			    if(entropy_client.call(entropy_srv)>0)
-			    {
-				    ROS_INFO("Entropy at Point (%f,%f) is %.3f", entropy_srv.request.x, entropy_srv.request.y, entropy_srv.response.value);
-				    new_entropy = entropy_srv.response.value;
-			    }
-			    else
-			    {
-				    ROS_ERROR("Failed to call entropy service");
-				    return 1;
-			    }
-
-
-			    if(new_entropy > old_entropy)
-			    {
-				    old_entropy = new_entropy;
-				    //                    ROS_ERROR("here!");
-				    next_position.x = entropy_srv.request.x;
-				    next_position.y = entropy_srv.request.y;
-				    next_position.z = entropy_srv.request.z;
-
-			    }
-
-		    }
-
-		    //Move Base
-		    ROS_INFO("Moving to point (%f,%f)...", next_position.x, next_position.y);
-		    goal.target_pose.header.stamp = ros::Time::now();
-		    goal.target_pose.pose.position.x = next_position.x;
-		    goal.target_pose.pose.position.y = next_position.y;
-		    goal.target_pose.pose.orientation.w = 1.0;
-
-		    ac.sendGoal(goal);
-		    ac.waitForResult();
-
-		    if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
-			    ROS_INFO("Hooray!");
-		    else
-			    ROS_INFO("The base failed to move for some reason");
+//		    if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
+//			    ROS_INFO("Hooray!");
+//		    else
+//			    ROS_INFO("The base failed to move for some reason");
 
 	    }
 	    catch (tf::TransformException ex) {
