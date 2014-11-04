@@ -20,7 +20,7 @@
 
 using namespace std;
 
-double entropy_interval;
+double entropy_step;
 
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
     ros::NodeHandle n;
 
     ros::NodeHandle nh("~");
-    nh.param("interval", entropy_interval, 1.0);
+    nh.param("interval", entropy_step, 1.0);
 
     //Entropy Service Client
     ros::ServiceClient entropy_client = n.serviceClient<fremen::Entropy>("/fremenGrid/entropy");
@@ -78,8 +78,8 @@ int main(int argc, char *argv[])
 
     //Entropy Grid
     unsigned int nr_x, nr_y;
-    nr_x = ((DIM_X*RESOLUTION-entropy_interval)/entropy_interval);
-    nr_y = ((DIM_Y*RESOLUTION-entropy_interval)/entropy_interval);
+    nr_x = ((DIM_X*RESOLUTION-entropy_step)/entropy_step);
+    nr_y = ((DIM_Y*RESOLUTION-entropy_step)/entropy_step);
 
 
     float entropy_grid[nr_x*nr_y];
@@ -90,8 +90,8 @@ int main(int argc, char *argv[])
     {
 
         //Initial coordinates:
-        float x = MIN_X+entropy_interval;
-        float y = MIN_Y+entropy_interval;
+        float x = MIN_X+entropy_step;
+        float y = MIN_Y+entropy_step;
 
         for(int i = 0; i < nr_x * nr_y; i++)
         {
@@ -126,11 +126,11 @@ int main(int argc, char *argv[])
                 values_markers.markers.push_back(text_point);
 
                 //Next coordinates:
-                x += entropy_interval;
-                if(x > (MIN_X + DIM_X*RESOLUTION - entropy_interval))
+                x += entropy_step;
+                if(x > (MIN_X + DIM_X*RESOLUTION - entropy_step))
                 {
-                    x = MIN_X + entropy_interval;
-                    y += entropy_interval;
+                    x = MIN_X + entropy_step;
+                    y += entropy_step;
                 }
 
             }
