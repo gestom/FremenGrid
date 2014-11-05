@@ -20,11 +20,7 @@
 #include "fremen/Visualize.h"
 #include <std_msgs/String.h>
 
-<<<<<<< HEAD
 #define BHAM_SMALL 
-=======
-#define BHAM_SMALL
->>>>>>> 766c389e14282fe78dbe6cb89468d9fb3abbf19b
 
 #ifdef BHAM_LARGE
 #define MIN_X  -18.2

@@ -6,7 +6,7 @@ CFremenGrid::CFremenGrid(float originX,float originY,float originZ,int dimX,int 
 {
 	minProb = 0.05;
 	maxProb = 1-minProb;
-	residualEntropy = minProb*ln(minProb);
+	residualEntropy = minProb*log2f(minProb);
 	debug = false;
 	oX = originX;
 	oY = originY;
@@ -271,8 +271,7 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float phiRange,floa
 			cellFree = prob < 0.7;
 			if (aux[cellIndex] == 0){
 				aux[cellIndex] = 1;
-				entropy-=prob*log2f(prob)+;
-				//if (cellFree) probs[cellIndex] = 0.05;
+				entropy-=(prob*log2f(prob)-residualEntropy);
 			}
 		}
 		rayIndex=castLength;
