@@ -57,7 +57,7 @@ CFremenGrid::CFremenGrid(float originX,float originY,float originZ,int dimX,int 
 	}
 	
 	if (debug) printf("Float size: %i \n",(int)sizeof(double));
-	lastPhiRange=lastPsiRange=lastRange=numRaycasters = 0;
+	lastPhiRange=lastPsiMin=lastPsiMax=lastRange=numRaycasters = 0;
 	//cellArray = (CFrelement**) malloc(numCells*sizeof(CFrelement*));
 	//for (int i=0;i<numCells;i++) cellArray[i] = new CFrelement();
 	
@@ -83,7 +83,7 @@ int CFremenGrid::getIndex(float x,float  y,float  z)
 	return 0;
 }
 
-float CFremenGrid::getInformation(float sx,float sy,float sz,float phiRange,float psiRange,float range,float timeStamp)
+float CFremenGrid::getInformation(float sx,float sy,float sz,float range,float timeStamp)
 {
 	CTimer timer;
 	timer.reset();
@@ -103,13 +103,17 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float phiRange,floa
 	py -= offY;	
 	pz -= offZ;
 	int startIndex =  (int)px+xDim*((int)py+yDim*((int)pz));
-
-	if (phiRange != lastPhiRange || psiRange != lastPsiRange || range != lastRange)
+	int backupIndex = startIndex;
+	float psiMax = 0.9;
+	float psiMin = -0.7;
+	float phiRange = M_PI;
+	if (phiRange != lastPhiRange || psiMax != lastPsiMax || psiMin != lastPsiMin || range != lastRange)
 	{
 		if (numRaycasters > 0) free(raycasters);
 		numRaycasters = 0;
 		lastPhiRange = phiRange;
-		lastPsiRange  = psiRange;
+		lastPsiMax  = psiMax;
+		lastPsiMin  = psiMin;
 		lastRange = range;
 	}
 	//precalculate raycasting structures
@@ -129,13 +133,13 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float phiRange,floa
 		int ix,iy,iz,index,final,xStep,yStep,zStep;
 
 		range/=resolution;
-		for (float psi = -psiRange;psi<=psiRange;psi+=granularity)
+		for (float psi = psiMin;psi<=psiMax;psi+=granularity)
 		{
 			phiStep = granularity/cos(psi);
 			for (float phi = -phiRange;phi<=phiRange;phi+=phiStep){
 				x[size] = range*cos(phi)*cos(psi)+px; 
 				y[size] = range*sin(phi)*cos(psi)+py; 
-				z[size] = range*sin(psi)+pz; 
+				z[size] = -range*sin(psi)+pz; 
 				size++;
 			}
 		}
@@ -258,6 +262,7 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float phiRange,floa
 	}
 	timer.reset();
 	int rayIndex = 0;
+	startIndex = backupIndex;
 	int cellIndex = startIndex;
 	bool cellFree=true;
 	float prob;
@@ -274,6 +279,7 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float phiRange,floa
 				entropy-=(prob*log2f(prob)-residualEntropy);
 			}
 		}
+		aux[cellIndex] = 2;
 		rayIndex=castLength;
 	}
 	if (debug) printf("Entropy to preprocess, prepare, raycast and calculate %i %i %i %i %.0f \n",preprocess,prepare,calculate,timer.getTime(),entropy);

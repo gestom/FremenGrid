@@ -148,7 +148,7 @@ bool addDepth(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 
 bool estimateEntropy(fremen::Entropy::Request  &req, fremen::Entropy::Response &res)
 {
-    res.value = grid->getInformation(req.x,req.y,req.z,M_PI,0.4,req.r,req.t);
+	res.value = grid->getInformation(req.x,req.y,req.z,req.r,req.t);
 	return true;
 }
 
@@ -178,12 +178,13 @@ bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response
 	markers.points.clear();
 
 	// prepare to iterate over the entire grid 
-	float minX = MIN_X;
-	float minY = MIN_Y;
-	float minZ = MIN_Z;
-	float maxX = MIN_X+DIM_X*RESOLUTION-3*RESOLUTION/4;
-	float maxY = MIN_Y+DIM_Y*RESOLUTION-3*RESOLUTION/4;
-	float maxZ = MIN_Z+DIM_Z*RESOLUTION-3*RESOLUTION/4;
+	float resolution = grid->resolution; 
+	float minX = grid->oX;
+	float minY = grid->oY;
+	float minZ = grid->oZ;
+	float maxX = minX+grid->xDim*grid->resolution-3*grid->resolution/4;
+	float maxY = minY+grid->yDim*grid->resolution-3*grid->resolution/4;
+	float maxZ = minZ+grid->zDim*grid->resolution-3*grid->resolution/4;
 	int cnt = 0;
 	int cells = 0;
 	float estimate,minP,maxP;
@@ -191,9 +192,9 @@ bool visualizeGrid(fremen::Visualize::Request  &req, fremen::Visualize::Response
 	maxP = req.maxProbability;
 	
 	//iterate over the cells' probabilities 
-	for(float z = MIN_Z;z<maxZ;z+=RESOLUTION){
-		for(float y = MIN_Y;y<maxY;y+=RESOLUTION){
-			for(float x = MIN_X;x<maxX;x+=RESOLUTION){
+	for(float z = minZ;z<maxZ;z+=resolution){
+		for(float y = minY;y<maxY;y+=resolution){
+			for(float x = minX;x<maxX;x+=resolution){
 				if (req.type == 0) estimate = grid->estimate(cnt,0);
 				if (req.type == 1) estimate = grid->aux[cnt];
 				
@@ -258,8 +259,8 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 		tf::Matrix3x3  rot = st.getBasis();
 		rot.getEulerYPR(a,b,c,1);
 		printf("%.3f %.3f %.3f\n",a,b,c);
-		phi = a-c;
-		psi = b;
+		psi = -M_PI/2-c;
+		phi = a-c-psi;
 		for (float h = fy;h<ly;h+=vy)
 		{
 			for (float w = fx;w<lx;w+=vx)
@@ -271,9 +272,9 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 					di = CAMERA_RANGE;
 					d[cnt] = 0;
 				}
-				ix = di;
+				ix = di*(cos(psi)-sin(psi)*h);
 				iy = -w*di;
-				iz = -h*di;
+				iz = -di*(sin(psi)+cos(psi)*h);
 				x[cnt] = cos(phi)*ix-sin(phi)*iy+xPtu;
 				y[cnt] = sin(phi)*ix+cos(phi)*iy+yPtu;
 				z[cnt] = iz+zPtu;

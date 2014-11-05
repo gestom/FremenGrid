@@ -21,7 +21,7 @@ class CFremenGrid
 
 		/*state estimation: estimates the state of the i-th element*/
 		float estimate(float x,float y,float z,float timeStamp);
-		float getInformation(float x,float y,float z,float phiRange,float psiRange,float range,float timeStamp);
+		float getInformation(float x,float y,float z,float range,float timeStamp);
 
 		/*changes the model order*/
 		void print(bool verbose);
@@ -44,7 +44,7 @@ class CFremenGrid
 		bool debug;
 
 		float minProb,maxProb,residualEntropy;
-		float lastPhiRange,lastPsiRange,lastRange;
+		float lastPhiRange,lastPsiMin,lastPsiMax,lastRange;
 		int *raycasters;
 		int numRaycasters;
 };
