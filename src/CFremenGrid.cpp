@@ -318,7 +318,7 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 			final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
 			if (aux[final] != 1){
 				aux[final] = 1;
-				if (d[i]==1) probs[final] = 0.95; else probs[final] = 0.05;
+                if (d[i]==1) probs[final] = 0.9995; else probs[final] = 0.0005;
 				process[i] = 1;
 			}
 		}
@@ -393,7 +393,7 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 				//if (debug) printf("Index %06i %06i %06i %.2f %.2f %.2f %.2f\n",index,final,startIndex,bx,bx*rx+px,by*ry+py,bz*rz+pz);
 				if (aux[index] == 0){
 					aux[index] = 1;
-					probs[index] = 0.05;
+                    probs[index] = 0.0005;
 				}
 				if (bx < by && bx < bz)
 				{
