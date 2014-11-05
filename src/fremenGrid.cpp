@@ -20,7 +20,11 @@
 #include "fremen/Visualize.h"
 #include <std_msgs/String.h>
 
+<<<<<<< HEAD
 #define BHAM_SMALL 
+=======
+#define BHAM_SMALL
+>>>>>>> 766c389e14282fe78dbe6cb89468d9fb3abbf19b
 
 #ifdef BHAM_LARGE
 #define MIN_X  -18.2
@@ -148,7 +152,7 @@ bool addDepth(fremen::AddView::Request  &req, fremen::AddView::Response &res)
 
 bool estimateEntropy(fremen::Entropy::Request  &req, fremen::Entropy::Response &res)
 {
-	res.value = grid->getInformation(req.x,req.y,req.z,M_PI,0.4,req.r,req.t);
+    res.value = grid->getInformation(req.x,req.y,req.z,M_PI,0.4,req.r,req.t);
 	return true;
 }
 

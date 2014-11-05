@@ -5,41 +5,87 @@
 #include <move_base_msgs/MoveBaseAction.h>
 #include <actionlib/client/simple_action_client.h>
 #include <sensor_msgs/JointState.h>
+//#include <ros/move_base.h>
 
 #include "fremen/Entropy.h"
 #include "fremen/AddView.h"
 #include "fremen/Visualize.h"
+#include "nav_msgs/GetPlan.h"
+
+#define MIN_X  -5.8
+#define MIN_Y  -19.0
+#define MIN_Z  0.0
+#define DIM_X 250
+#define DIM_Y 500
+#define DIM_Z 80
+#define RESOLUTION 0.05
+
+#define MAX_ENTROPY 132000
 
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
 using namespace std;
+
+struct keypoints{
+    float x;
+    float y;
+    float entropy;
+    float ratio;
+    float ratioEstimate;
+    double dist;
+    double distEstimate;
+    bool reachable;
+};
+
 int ptuMovementFinished = 0;
 
 //Parameteres
-double exploration_radius;//just for a initial planning
-int nr_points;
+double exploration_radius, entropy_step;
+
 ros::Publisher ptu_pub;
 sensor_msgs::JointState ptu;
 
+double distanceCalculate(double x1, double y1, double x2, double y2)
+{
+    double x = x1 - x2;
+    double y = y1 - y2;
+    double dist;
+
+    dist = pow(x,2)+pow(y,2);
+    dist = sqrt(dist);
+
+    return dist;
+}
+
+int comparekeypoints (const void * a, const void * b)
+{
+    struct keypoints *ia = (struct keypoints *)a;
+    struct keypoints *ib = (struct keypoints *)b;
+    if ( ia->ratioEstimate > ib->ratioEstimate) return -1;
+    return 1;
+
+
+}
+
 void movePtu(float pan,float tilt)
 {
-	ptuMovementFinished = 0;
-	ptu.name[0] ="pan";
-	ptu.name[1] ="tilt";
-	ptu.position[0] = pan;
-	ptu.position[1] = tilt;
-	ptu.velocity[0] = ptu.velocity[1] = 1.0;
-	ptu_pub.publish(ptu);
+    ptuMovementFinished = 0;
+    ptu.name[0] ="pan";
+    ptu.name[1] ="tilt";
+    ptu.position[0] = pan;
+    ptu.position[1] = tilt;
+    ptu.velocity[0] = ptu.velocity[1] = 1.0;
+    ptu_pub.publish(ptu);
 }
 
 void ptuCallback(const sensor_msgs::JointState::ConstPtr &msg)
 {
-	for (int i = 0;i<3;i++){
-		if (msg->name[i] == "pan"){
-//			printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
-			if (fabs(msg->position[i]-ptu.position[0])<0.01) ptuMovementFinished++;
-		}
-	}
+    for (int i = 0;i<3;i++){
+        if (msg->name[i] == "pan"){
+            //			printf("Pan %i %.3f - %.3f = %.3f\n",ptuMovementFinished,msg->position[i],ptu.position[0],msg->position[i]-ptu.position[0]);
+            if (fabs(msg->position[i]-ptu.position[0])<0.01) ptuMovementFinished++;
+        }
+    }
 }
 
 int main(int argc,char *argv[])
@@ -48,8 +94,8 @@ int main(int argc,char *argv[])
     ros::NodeHandle n;
 
     ros::NodeHandle nh("~");
-    nh.param("exploration_radius", exploration_radius, 2.0);
-    nh.param("nr_points", nr_points, 12);
+    nh.param("interval", entropy_step, 1.0);
+
 
     //tell the action client that we want to spin a thread by default
     MoveBaseClient ac("move_base", true);
@@ -58,31 +104,33 @@ int main(int argc,char *argv[])
 
     tf::TransformListener tf_listener;
 
-    //Publisher
-    ros::Publisher testPts_pub = n.advertise<visualization_msgs::Marker>("/test_points", 100);
-    ros::Publisher testEntropy_pub = n.advertise<visualization_msgs::MarkerArray>("/entropy_test", 100);
-  
+    //Publishers (Visualization of Points + Entropy Values)
+    ros::Publisher points_pub = n.advertise<visualization_msgs::MarkerArray>("/entropy_points", 100);
+    ros::Publisher text_pub = n.advertise<visualization_msgs::MarkerArray>("/entropy_values", 100);
 
+    //Subscribers
+    ros::Subscriber ptu_sub = n.subscribe("/ptu/state", 10, ptuCallback);
     ptu.name.resize(2);
     ptu.position.resize(2);
     ptu.velocity.resize(2);
     ptu_pub = n.advertise<sensor_msgs::JointState>("/ptu/cmd", 10);
 
-    geometry_msgs::Point position, next_position, marker_point;
-
-    ros::Subscriber ptu_sub = n.subscribe("/ptu/state", 10, ptuCallback);
 
     //entropy service client
     ros::ServiceClient entropy_client = n.serviceClient<fremen::Entropy>("/fremenGrid/entropy");
-    fremen::Visualize visualize_srv;
+    fremen::Entropy entropy_srv;
 
     //vizualize client
     ros::ServiceClient visualize_client = n.serviceClient<fremen::Visualize>("/fremenGrid/visualize");
-    fremen::Entropy entropy_srv;
+    fremen::Visualize visualize_srv;
 
     //measure service client
     ros::ServiceClient measure_client = n.serviceClient<fremen::AddView>("/fremenGrid/depth");
     fremen::AddView measure_srv;
+
+    //plan service client
+    ros::ServiceClient plan_client = n.serviceClient<nav_msgs::GetPlan>("/move_base/make_plan");
+    nav_msgs::GetPlan plan_srv;
 
     //move_base client
     move_base_msgs::MoveBaseGoal goal;
@@ -91,122 +139,542 @@ int main(int argc,char *argv[])
     //get robot pose
     tf::StampedTransform st;
 
+    //entropy points
+    unsigned int nr_x, nr_y, grid_length;
+    nr_x = ((DIM_X*RESOLUTION-entropy_step)/entropy_step);
+    nr_y = ((DIM_Y*RESOLUTION-entropy_step)/entropy_step);
+
+    grid_length = nr_x * nr_y;
+
+    keypoints entropy_grid[grid_length];
+
+    for(int i = 0; i < grid_length; i++)
+        entropy_grid[i].reachable = true;
+
+    //Markers Initialization
+    visualization_msgs::MarkerArray points_markers, values_markers;
+
+    visualization_msgs::Marker test_point;
+    test_point.header.frame_id = "/map";
+    test_point.header.stamp = ros::Time::now();
+    test_point.ns = "my_namespace";
+    test_point.action = visualization_msgs::Marker::ADD;
+    test_point.type = visualization_msgs::Marker::SPHERE;
+    test_point.scale.x = 0.3;
+    test_point.scale.y = 0.3;
+    test_point.scale.z = 0.3;
+    test_point.color.a = 0.6;
+    test_point.color.r = 0.1;
+    test_point.color.g = 0.0;
+    test_point.color.b = 1.0;
+    test_point.pose.position.z = 0.1;
+    test_point.pose.orientation.w = 1.0;
+
+    visualization_msgs::Marker text_point;
+    text_point.header.frame_id = "/map";
+    text_point.header.stamp = ros::Time::now();
+    text_point.ns = "my_namespace";
+    text_point.action = visualization_msgs::Marker::ADD;
+    text_point.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+    text_point.scale.z = 0.1;
+    text_point.color.a = 1.0;
+    text_point.color.r = 1.0;
+    text_point.color.g = 1.0;
+    text_point.color.b = 1.0;
+    text_point.pose.position.z = 0.1;
+    text_point.pose.orientation.w = 1.0;
+
+    plan_srv.request.start.header.frame_id = "/map";
+    plan_srv.request.start.pose.orientation.w = 1.0;
+    plan_srv.request.goal.header.frame_id = "/map";
+    plan_srv.request.goal.pose.orientation.w = 1.0;
+    plan_srv.request.tolerance = 0.2;
+
+
+    geometry_msgs::Point current_position;
+    char output[1000];
+
+    bool  first_it = true;
+
+
     float ptuSweepStep = 2.0*M_PI/7.0;
     float ptuAngle = -3*ptuSweepStep;
     sleep(1);
     movePtu(ptuAngle,0);
     usleep(10000);
     while (ros::ok()){
-	    ptuAngle = -3*ptuSweepStep;
-	    movePtu(ptuAngle,0);
-	    while (ros::ok() && ptuAngle < M_PI)
-	    {
-		    measure_srv.request.stamp = 0.0;
-		    if (ptuMovementFinished > 10){
-			    if(measure_client.call(measure_srv))
-			    {
-				    ROS_INFO("Measure added to grid!");
-			    }
-			    else
-			    {
-				    ROS_ERROR("Failed to call measure service");
-				    return 1;
-			    }
-			    ptuAngle += ptuSweepStep; 
-			    usleep(500000);
-			    movePtu(ptuAngle,0);
-			    visualize_srv.request.red = visualize_srv.request.blue = 0.0;
-			    visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
-			    visualize_srv.request.minProbability = 0.9;
-			    visualize_srv.request.maxProbability = 1.0;
-			    visualize_srv.request.name = "occupied";
-			    visualize_srv.request.type = 0;
-			    visualize_client.call(visualize_srv);
-			    ros::spinOnce();
-			    usleep(100000);
+        ptuAngle = -3*ptuSweepStep;
+        movePtu(ptuAngle,0);
+        while (ros::ok() && ptuAngle < M_PI)
+        {
+            measure_srv.request.stamp = 0.0;
+            if (ptuMovementFinished > 10){
+                if(measure_client.call(measure_srv))
+                {
+                    ROS_INFO("Measure added to grid!");
+                }
+                else
+                {
+                    ROS_ERROR("Failed to call measure service");
+                    return 1;
+                }
+                ptuAngle += ptuSweepStep;
+                usleep(500000);
+                movePtu(ptuAngle,0);
+                visualize_srv.request.red = visualize_srv.request.blue = 0.0;
+                visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
+                visualize_srv.request.minProbability = 0.9;
+                visualize_srv.request.maxProbability = 1.0;
+                visualize_srv.request.name = "occupied";
+                visualize_srv.request.type = 0;
+                visualize_client.call(visualize_srv);
+                ros::spinOnce();
+                usleep(100000);
 
-			    visualize_srv.request.green = 0.0;
-			    visualize_srv.request.red = 1.0;
-			    visualize_srv.request.minProbability = 0.0;
-			    visualize_srv.request.maxProbability = 0.1;
-			    visualize_srv.request.alpha = 0.005;
-			    visualize_srv.request.name = "free";
-			    visualize_srv.request.type = 0;
-			    visualize_client.call(visualize_srv);
-			    ros::spinOnce();
-			    usleep(100000);
+                visualize_srv.request.green = 0.0;
+                visualize_srv.request.red = 1.0;
+                visualize_srv.request.minProbability = 0.0;
+                visualize_srv.request.maxProbability = 0.1;
+                visualize_srv.request.alpha = 0.005;
+                visualize_srv.request.name = "free";
+                visualize_srv.request.type = 0;
+                visualize_client.call(visualize_srv);
+                ros::spinOnce();
+                usleep(100000);
+
+            }
+            ros::spinOnce();
+        }
+        ptuAngle = 0;
+        movePtu(ptuAngle,0);
+
+        if(first_it)
+        {
+
+            try
+            {
+                tf_listener.waitForTransform("/map","/base_link",ros::Time::now(), ros::Duration(2));
+                tf_listener.lookupTransform("/map","/base_link",ros::Time(0),st);
+
+                current_position.x = st.getOrigin().x();
+                current_position.y = st.getOrigin().y();
+
+                //Update Entropy Grid:
+
+                float x = MIN_X+entropy_step;
+                float y = MIN_Y+entropy_step;
+
+                for(int i = 0; i < grid_length; i++)
+                {
+                    //Service Request Initialization:
+                    entropy_srv.request.x = x;
+                    entropy_srv.request.y = y;
+                    entropy_srv.request.z = 1.69;
+                    entropy_srv.request.r = 4;
+                    entropy_srv.request.t = 0.0;
+
+                    //Entropy Service Call:
+                    if(entropy_client.call(entropy_srv)>0)
+                    {
+                        //Save values for planning
+                        entropy_grid[i].entropy = entropy_srv.response.value;
+                        entropy_grid[i].x = x;
+                        entropy_grid[i].y = y;
+                        entropy_grid[i].ratioEstimate = entropy_srv.response.value/distanceCalculate(current_position.x, current_position.y, x, y);
+
+                        //Add test point (size of the marker depends on the entropy value)
+                        test_point.pose.position.x = x;
+                        test_point.pose.position.y = y;
+                        test_point.id = i;
+                        test_point.scale.x = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+                        test_point.scale.y = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+                        points_markers.markers.push_back(test_point);
+
+                        //Add text position  and value
+                        text_point.pose.position.x = x;
+                        text_point.pose.position.y = y;
+                        sprintf(output,"%.3f",entropy_srv.response.value);
+                        text_point.text = output;
+                        text_point.id = i;
+                        values_markers.markers.push_back(text_point);
+
+                        //Publish Visualization Markers
+                        points_pub.publish(points_markers);
+                        text_pub.publish(values_markers);
+
+                        //Next coordinates:
+                        x += entropy_step;
+                        if(x > (MIN_X + DIM_X*RESOLUTION - entropy_step))
+                        {
+                            x = MIN_X + entropy_step;
+                            y += entropy_step;
+                        }
+
+
+                    }
+                    else
+                    {
+                        ROS_ERROR("Failed to call entropy service!");
+                        return 1;
+                    }
+                }
+
+                first_it = false;
+                int max_ind = 0;
+                double max_ratio = 0.0;
+
+                ROS_INFO("Sorting grid...");
+
+                //Sort (qsort)
+                qsort (entropy_grid, grid_length, sizeof(keypoints), comparekeypoints);
+
+
+                //Evaluate Points
+                plan_srv.request.start.pose.position.x = current_position.x;
+                plan_srv.request.start.pose.position.y = current_position.y;
+
+                ROS_INFO("Improving ratios...");
+
+                for(int i = 0; i < grid_length - 1; i++)
+                {
+
+                    plan_srv.request.goal.pose.position.x = entropy_grid[i].x;
+                    plan_srv.request.goal.pose.position.y = entropy_grid[i].y;
+
+                    double path_lenght = 0.0;
+
+                    if(plan_client.call(plan_srv))
+                    {
+                        if((int) plan_srv.response.plan.poses.size() > 0)//path received and lenght is calculated
+                        {
+
+                            for(int j = 0; j < (int) plan_srv.response.plan.poses.size() - 1; j++)
+                            {
+                                path_lenght += distanceCalculate(plan_srv.response.plan.poses[j].pose.position.x, plan_srv.response.plan.poses[j].pose.position.y, plan_srv.response.plan.poses[j+1].pose.position.x, plan_srv.response.plan.poses[j+1].pose.position.y);
+                            }
+                            entropy_grid[i].dist = path_lenght;
+                            ROS_INFO("path received...");
+                        }
+                        else//the path doesn't exist -> point is not reacheable and should be ignored
+                        {
+                            entropy_grid[i].reachable = false;
+                            //continue;//jumps to the next point
+                        }
+                    }
+                    else
+                    {
+                        ROS_ERROR("Failed to call plan service!");
+                        return 1;
+                    }
 
 
 
-		    }
-		    ros::spinOnce();
-	    }
-	    ptuAngle = 0;
-	    movePtu(ptuAngle,0);
-	    try {
-		    tf_listener.waitForTransform("/map","/base_link",ros::Time::now(), ros::Duration(2));
-		    tf_listener.lookupTransform("/map","/base_link",ros::Time(0),st);
+                    entropy_grid[i].ratio = entropy_grid[i].entropy/entropy_grid[i].dist;
 
-		    position.x = st.getOrigin().x();
-		    position.y = st.getOrigin().y();
+                    if(entropy_grid[i].ratio > entropy_grid[i+1].ratioEstimate)
+                    {
+                        //move_base
+                        ROS_INFO("Moving to point (%f,%f)...", entropy_grid[i].x, entropy_grid[i].y);
+                        goal.target_pose.header.stamp = ros::Time::now();
+                        goal.target_pose.pose.position.x = entropy_grid[i].x;
+                        goal.target_pose.pose.position.y = entropy_grid[i].y;
+                        goal.target_pose.pose.orientation.w = 1.0;
 
-		    float new_entropy = 0.0, old_entropy = 0.0;
+                        ac.sendGoal(goal);
+                        ac.waitForResult();
 
-		    for(float i = 0; i < 2*M_PI; i+= 2*M_PI/nr_points)
-		    {
-			    entropy_srv.request.x = position.x + exploration_radius * cos(i);
-			    entropy_srv.request.y = position.y + exploration_radius * sin(i);
-			    entropy_srv.request.z = 1.69;
-			    entropy_srv.request.r = 4;
-			    entropy_srv.request.t = 0.0;
+                        if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
+                            ROS_INFO("Hooray!");
+                        else
+                            ROS_INFO("The base failed to move for some reason");
+                        break;
+                    }
+                    else
+                    {
+                        if(entropy_grid[i].ratio > max_ratio)
+                        {
+                            max_ratio = entropy_grid[i].ratio;
+                            max_ind = i;
+                        }
+                    }
+                }
+            }
+            catch (tf::TransformException ex)
+            {
+                ROS_ERROR("FreMeEn map could not incorporate the latest measurements %s",ex.what());
+                return 0;
+            }
+        }
+        else
+        {
+            //do the same as before without calculating the points
+            try
+            {
+                tf_listener.waitForTransform("/map","/base_link",ros::Time::now(), ros::Duration(2));
+                tf_listener.lookupTransform("/map","/base_link",ros::Time(0),st);
+
+                current_position.x = st.getOrigin().x();
+                current_position.y = st.getOrigin().y();
+
+                //Update Entropy Grid:
+
+                for(int i = 0; i < grid_length; i++)
+                {
+                    //Service Request Initialization:
+                    entropy_srv.request.x = entropy_grid[i].x;
+                    entropy_srv.request.y = entropy_grid[i].y;
+                    entropy_srv.request.z = 1.69;
+                    entropy_srv.request.r = 4;
+                    entropy_srv.request.t = 0.0;
+
+                    //Entropy Service Call:
+                    if(entropy_client.call(entropy_srv)>0)
+                    {
+                        //Save values for planning
+                        entropy_grid[i].entropy = entropy_srv.response.value;
+                        entropy_grid[i].ratioEstimate = entropy_srv.response.value/distanceCalculate(current_position.x, current_position.y, entropy_grid[i].x, entropy_grid[i].y);
+
+                        //Add test point (size of the marker depends on the entropy value)
+                        test_point.pose.position.x = entropy_grid[i].x;
+                        test_point.pose.position.y = entropy_grid[i].y;
+                        test_point.id = i;
+                        test_point.scale.x = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+                        test_point.scale.y = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+                        points_markers.markers.push_back(test_point);
+
+                        //Add text position  and value
+                        text_point.pose.position.x = entropy_grid[i].x;
+                        text_point.pose.position.y = entropy_grid[i].y;
+                        sprintf(output,"%.3f",entropy_srv.response.value);
+                        text_point.text = output;
+                        text_point.id = i;
+                        values_markers.markers.push_back(text_point);
+
+                        //Publish Visualization Markers
+                        points_pub.publish(points_markers);
+                        text_pub.publish(values_markers);
+
+                    }
+                    else
+                    {
+                        ROS_ERROR("Failed to call entropy service!");
+                        return 1;
+                    }
+                }
+
+                int max_ind = 0;
+                double max_ratio = 0.0;
+
+                ROS_INFO("Sorting grid...");
+
+                //Sort (qsort)
+                qsort (entropy_grid, grid_length, sizeof(keypoints), comparekeypoints);
 
 
-			    //Entropy Srv
-			    if(entropy_client.call(entropy_srv)>0)
-			    {
-				    ROS_INFO("Entropy at Point (%f,%f) is %.3f", entropy_srv.request.x, entropy_srv.request.y, entropy_srv.response.value);
-				    new_entropy = entropy_srv.response.value;
-			    }
-			    else
-			    {
-				    ROS_ERROR("Failed to call entropy service");
-				    return 1;
-			    }
+                //Evaluate Points
+                plan_srv.request.start.pose.position.x = current_position.x;
+                plan_srv.request.start.pose.position.y = current_position.y;
+
+                ROS_INFO("Improving ratios...");
+
+                for(int i = 0; i < grid_length - 1; i++)
+                {
+
+                    plan_srv.request.goal.pose.position.x = entropy_grid[i].x;
+                    plan_srv.request.goal.pose.position.y = entropy_grid[i].y;
+
+                    double path_lenght = 0.0;
+
+                    if(plan_client.call(plan_srv))
+                    {
+                        if((int) plan_srv.response.plan.poses.size() > 0)//path received and lenght is calculated
+                        {
+
+                            for(int j = 0; j < (int) plan_srv.response.plan.poses.size() - 1; j++)
+                            {
+                                path_lenght += distanceCalculate(plan_srv.response.plan.poses[j].pose.position.x, plan_srv.response.plan.poses[j].pose.position.y, plan_srv.response.plan.poses[j+1].pose.position.x, plan_srv.response.plan.poses[j+1].pose.position.y);
+                            }
+                            entropy_grid[i].dist = path_lenght;
+                            ROS_INFO("path received...");
+                        }
+                        else//the path doesn't exist -> point is not reacheable and should be ignored
+                        {
+                            entropy_grid[i].reachable = false;
+                            //continue;//jumps to the next point
+                        }
+                    }
+                    else
+                    {
+                        ROS_ERROR("Failed to call plan service!");
+                        return 1;
+                    }
 
 
-			    if(new_entropy > old_entropy)
-			    {
-				    old_entropy = new_entropy;
-				    //                    ROS_ERROR("here!");
-				    next_position.x = entropy_srv.request.x;
-				    next_position.y = entropy_srv.request.y;
-				    next_position.z = entropy_srv.request.z;
 
-			    }
+                    entropy_grid[i].ratio = entropy_grid[i].entropy/entropy_grid[i].dist;
 
-		    }
+                    if(entropy_grid[i].ratio >= entropy_grid[i+1].ratioEstimate)
+                    {
+                        //move_base
+                        ROS_INFO("Moving to point (%f,%f)...", entropy_grid[i].x, entropy_grid[i].y);
+                        goal.target_pose.header.stamp = ros::Time::now();
+                        goal.target_pose.pose.position.x = entropy_grid[i].x;
+                        goal.target_pose.pose.position.y = entropy_grid[i].y;
+                        goal.target_pose.pose.orientation.w = 1.0;
 
-		    //Move Base
-		    ROS_INFO("Moving to point (%f,%f)...", next_position.x, next_position.y);
-		    goal.target_pose.header.stamp = ros::Time::now();
-		    goal.target_pose.pose.position.x = next_position.x;
-		    goal.target_pose.pose.position.y = next_position.y;
-		    goal.target_pose.pose.orientation.w = 1.0;
+                        ac.sendGoal(goal);
+                        ac.waitForResult();
 
-		    ac.sendGoal(goal);
-		    ac.waitForResult();
+                        if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
+                            ROS_INFO("Hooray!");
+                        else
+                            ROS_INFO("The base failed to move for some reason");
+                        break;
+                    }
+                    else
+                    {
+                        if(entropy_grid[i].ratio > max_ratio)
+                        {
+                            max_ratio = entropy_grid[i].ratio;
+                            max_ind = i;
+                        }
+                    }
+                }
+            }
+            catch (tf::TransformException ex)
+            {
+                ROS_ERROR("FreMeEn map could not incorporate the latest measurements %s",ex.what());
+                return 0;
+            }
 
-		    if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
-			    ROS_INFO("Hooray!");
-		    else
-			    ROS_INFO("The base failed to move for some reason");
 
-	    }
-	    catch (tf::TransformException ex) {
-		    ROS_ERROR("FreMeEn map cound not incorporate the latest measurements %s",ex.what());
-		    return 0;
-	    }
-	    ros::spinOnce();
+        }
+
+        //        try
+        //        {
+        //            tf_listener.waitForTransform("/map","/base_link",ros::Time::now(), ros::Duration(2));
+        //            tf_listener.lookupTransform("/map","/base_link",ros::Time(0),st);
+
+        //            current_position.x = st.getOrigin().x();
+        //            current_position.y = st.getOrigin().y();
+
+        //            //Update Entropy Grid:
+
+        //            float x = MIN_X+entropy_step;
+        //            float y = MIN_Y+entropy_step;
+
+        //            for(int i = 0; i < grid_length; i++)
+        //            {
+        //                //Service Request Initialization:
+        //                entropy_srv.request.x = x;
+        //                entropy_srv.request.y = y;
+        //                entropy_srv.request.z = 1.69;
+        //                entropy_srv.request.r = 4;
+        //                entropy_srv.request.t = 0.0;
+
+        //                //Entropy Service Call:
+        //                if(entropy_client.call(entropy_srv)>0)
+        //                {
+        //                    //Save values for planning
+        //                    entropy_grid[i].entropy = entropy_srv.response.value;
+        //                    entropy_grid[i].x = x;
+        //                    entropy_grid[i].y = y;
+
+        //                    plan_srv.request.start.header.frame_id = "/map";
+        //                    plan_srv.request.start.pose.orientation.w = 1.0;
+        //                    plan_srv.request.start.pose.position.x = current_position.x;
+        //                    plan_srv.request.start.pose.position.y = current_position.y;
+
+        //                    plan_srv.request.goal.header.frame_id = "/map";
+        //                    plan_srv.request.goal.pose.orientation.w = 1.0;
+        //                    plan_srv.request.goal.pose.position.x = x;
+
+
+        //                    plan_srv.request.tolerance = 0.2;
+
+
+        //                    if(plan_client.call(plan_srv))
+        //                    {
+
+
+        //                    }
+
+
+        //                    //Add test point (size of the marker depends on the entropy value)
+        //                    test_point.pose.position.x = x;
+        //                    test_point.pose.position.y = y;
+        //                    test_point.id = i;
+        //                    test_point.scale.x = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+        //                    test_point.scale.y = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+        //                    points_markers.markers.push_back(test_point);
+
+        //                    //Add text position  and value
+        //                    text_point.pose.position.x = x;
+        //                    text_point.pose.position.y = y;
+        //                    sprintf(output,"%.3f",entropy_srv.response.value);
+        //                    text_point.text = output;
+        //                    text_point.id = i;
+        //                    values_markers.markers.push_back(text_point);
+
+        //                    //Publish Visualization Markers
+        //                    points_pub.publish(points_markers);
+        //                    text_pub.publish(values_markers);
+
+        //                    //Next coordinates:
+        //                    x += entropy_step;
+        //                    if(x > (MIN_X + DIM_X*RESOLUTION - entropy_step))
+        //                    {
+        //                        x = MIN_X + entropy_step;
+        //                        y += entropy_step;
+        //                    }
+
+
+        //                }
+        //                else
+        //                {
+        //                    ROS_ERROR("Failed to call entropy service!");
+        //                    return 1;
+        //                }
+
+        //            }
+        //        }
+        //        catch (tf::TransformException ex)
+        //        {
+        //            ROS_ERROR("FreMeEn map cound not incorporate the latest measurements %s",ex.what());
+        //            return 0;
+        //        }
+
+        //            try
+        //            {
+        //                tf_listener.waitForTransform("/map","/base_link",ros::Time::now(), ros::Duration(2));
+        //                tf_listener.lookupTransform("/map","/base_link",ros::Time(0),st);
+
+        //                current_position.x = st.getOrigin().x();
+        //                current_position.y = st.getOrigin().y();
+
+        //Move Base
+        //                ROS_INFO("Moving to point (%f,%f)...", next_position.x, next_position.y);
+        //                goal.target_pose.header.stamp = ros::Time::now();
+        //                goal.target_pose.pose.position.x = next_position.x;
+        //                goal.target_pose.pose.position.y = next_position.y;
+        //                goal.target_pose.pose.orientation.w = 1.0;
+
+        //                ac.sendGoal(goal);
+        //                ac.waitForResult();
+
+        //                if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
+        //                    ROS_INFO("Hooray!");
+        //                else
+        //                    ROS_INFO("The base failed to move for some reason");
+
+        //            }
+        //            catch (tf::TransformException ex)
+        //            {
+        //                ROS_ERROR("FreMeEn map cound not incorporate the latest measurements %s",ex.what());
+        //                return 0;
+        //            }
+
+        ros::spinOnce();
     }
 
     return 0;

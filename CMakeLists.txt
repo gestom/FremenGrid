@@ -31,6 +31,7 @@ include_directories(${catkin_INCLUDE_DIRS})
 
 add_executable(fremengrid src/fremenGrid.cpp)
 add_executable(exploration src/fremenExploration.cpp)
+add_executable(grid_planning src/GridPlanning.cpp)
 
 add_library(frelement src/CFrelement.cpp)
 add_library(fremen_timer src/CTimer.cpp)
@@ -42,3 +43,4 @@ target_link_libraries(fremengrid fremengridlib)
 target_link_libraries(fremengrid ${catkin_LIBRARIES})
 
 target_link_libraries(exploration ${catkin_LIBRARIES})
+target_link_libraries(grid_planning ${catkin_LIBRARIES})
