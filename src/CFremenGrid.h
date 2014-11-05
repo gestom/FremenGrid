@@ -43,6 +43,7 @@ class CFremenGrid
 		int numCells;
 		bool debug;
 
+		float minProb,maxProb,resH;
 		float lastPhiRange,lastPsiRange,lastRange;
 		int *raycasters;
 		int numRaycasters;
