@@ -276,7 +276,7 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float range,float t
 			cellFree = prob < 0.7;
 			if (aux[cellIndex] == 0){
 				aux[cellIndex] = 1;
-				entropy-=min(prob*log2f(prob)-residualEntropy,0);
+                entropy-=fmin(prob*log2f(prob)-residualEntropy,0);
 			}
 		}
 		//aux[cellIndex] = 2;

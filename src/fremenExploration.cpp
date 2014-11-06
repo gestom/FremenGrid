@@ -49,7 +49,7 @@ sensor_msgs::JointState ptu;
 
 double distanceCalculate(geometry_msgs::Point a, geometry_msgs::Point b)
 {
-    return (pow((a.x - b.x), 2) + pow((a.y - b.y), 2));
+    return sqrt(pow((a.x - b.x), 2) + pow((a.y - b.y), 2));
 }
 
 
@@ -74,13 +74,13 @@ void movePtu(float pan,float tilt)
 
 void ptuCallback(const sensor_msgs::JointState::ConstPtr &msg)
 {
-	float pan,tilt;
-	for (int i = 0;i<3;i++){
-		if (msg->name[i] == "pan") pan = msg->position[i];
-		if (msg->name[i] == "tilt") tilt = msg->position[i];
-	}
-	//printf("PTU: %.3f %.3f %i\n",pan,tilt,ptuMovementFinished);
-	if (fabs(pan-ptu.position[0])<0.01 && fabs(tilt-ptu.position[1])<0.01) ptuMovementFinished++;
+    float pan,tilt;
+    for (int i = 0;i<3;i++){
+        if (msg->name[i] == "pan") pan = msg->position[i];
+        if (msg->name[i] == "tilt") tilt = msg->position[i];
+    }
+    //printf("PTU: %.3f %.3f %i\n",pan,tilt,ptuMovementFinished);
+    if (fabs(pan-ptu.position[0])<0.01 && fabs(tilt-ptu.position[1])<0.01) ptuMovementFinished++;
 }
 
 int main(int argc,char *argv[])
@@ -223,194 +223,189 @@ int main(int argc,char *argv[])
     sleep(1);
     while (ros::ok())
     {
-	    point = 0;
-	    movePtu(pan[point],tilt[point]);
-	    ros::spinOnce();
-	    while (ros::ok() && point < numPoints)
-	    {
-		    measure_srv.request.stamp = 0.0;
-		    if (ptuMovementFinished > 10){
-			    if(measure_client.call(measure_srv))
-			    {
-				    ROS_INFO("Measure added to grid!");
-			    }
-			    else
-			    {
-				    ROS_ERROR("Failed to call measure service");
-				    return 1;
-			    }
-			    point++;
-			    movePtu(pan[point],tilt[point]);
-			    ros::spinOnce();
-			    usleep(500000);
-			    if(drawCells){
-				    visualize_srv.request.red = visualize_srv.request.blue = 0.0;
-				    visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
-				    visualize_srv.request.minProbability = 0.9;
-				    visualize_srv.request.maxProbability = 1.0;
-				    visualize_srv.request.name = "occupied";
-				    visualize_srv.request.type = 0;
-				    visualize_client.call(visualize_srv);
-				    ros::spinOnce();
-				    usleep(100000);
-				    if (drawEmptyCells){
-					    visualize_srv.request.green = 0.0;
-					    visualize_srv.request.red = 1.0;
-					    visualize_srv.request.minProbability = 0.0;
-					    visualize_srv.request.maxProbability = 0.1;
-					    visualize_srv.request.alpha = 0.005;
-					    visualize_srv.request.name = "free";
-					    visualize_srv.request.type = 0;
-					    visualize_client.call(visualize_srv);
-					    ros::spinOnce();
-					    usleep(100000);
-				    }
-			    }
+        point = 0;
+        movePtu(pan[point],tilt[point]);
+        ros::spinOnce();
+        while (ros::ok() && point < numPoints)
+        {
+            measure_srv.request.stamp = 0.0;
+            if (ptuMovementFinished > 10){
+                if(measure_client.call(measure_srv))
+                {
+                    ROS_INFO("Measure added to grid!");
+                }
+                else
+                {
+                    ROS_ERROR("Failed to call measure service");
+                    return 1;
+                }
+                point++;
+                movePtu(pan[point],tilt[point]);
+                ros::spinOnce();
+                usleep(500000);
+                if(drawCells){
+                    visualize_srv.request.red = visualize_srv.request.blue = 0.0;
+                    visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
+                    visualize_srv.request.minProbability = 0.9;
+                    visualize_srv.request.maxProbability = 1.0;
+                    visualize_srv.request.name = "occupied";
+                    visualize_srv.request.type = 0;
+                    visualize_client.call(visualize_srv);
+                    ros::spinOnce();
+                    usleep(100000);
+                    if (drawEmptyCells){
+                        visualize_srv.request.green = 0.0;
+                        visualize_srv.request.red = 1.0;
+                        visualize_srv.request.minProbability = 0.0;
+                        visualize_srv.request.maxProbability = 0.1;
+                        visualize_srv.request.alpha = 0.005;
+                        visualize_srv.request.name = "free";
+                        visualize_srv.request.type = 0;
+                        visualize_client.call(visualize_srv);
+                        ros::spinOnce();
+                        usleep(100000);
+                    }
+                }
 
-		    }
-		    ros::spinOnce();
-	    }
-	    movePtu(0.0,0.0);
+            }
+            ros::spinOnce();
+        }
+        movePtu(0.0,0.0);
 
-	    max_ind = 0;
-	    max_ratio = 0.0;
+        max_ind = 0;
+        max_ratio = 0.0;
 
-	    try
-	    {
-		    tf_listener.waitForTransform("/map","/base_link",ros::Time::now(), ros::Duration(2));
-		    tf_listener.lookupTransform("/map","/base_link",ros::Time(0),st);
+        try
+        {
+            tf_listener.waitForTransform("/map","/base_link",ros::Time::now(), ros::Duration(2));
+            tf_listener.lookupTransform("/map","/base_link",ros::Time(0),st);
 
-		    current_pose.position.x = st.getOrigin().x();
-		    current_pose.position.y = st.getOrigin().y();
-		    current_pose.position.z = st.getOrigin().z();
+            current_pose.position.x = st.getOrigin().x();
+            current_pose.position.y = st.getOrigin().y();
+            current_pose.position.z = st.getOrigin().z();
 
-		    //Evaluate Points
-		    plan_srv.request.start.pose.position = current_pose.position;
+            //Evaluate Points
+            plan_srv.request.start.pose.position = current_pose.position;
 
-		    for(int i = 0; i < grid_length; i++)
-		    {
-			    entropy_srv.request.x = entropy_grid[i].position.x;
-			    entropy_srv.request.y = entropy_grid[i].position.y;
-			    entropy_srv.request.z = 1.69;//convert to parameter
-			    entropy_srv.request.r = 4;//convert to parameter
-			    entropy_srv.request.t = 0.0;
+            for(int i = 0; i < grid_length; i++)
+            {
+                entropy_srv.request.x = entropy_grid[i].position.x;
+                entropy_srv.request.y = entropy_grid[i].position.y;
+                entropy_srv.request.z = 1.69;//convert to parameter
+                entropy_srv.request.r = 4;//convert to parameter
+                entropy_srv.request.t = 0.0;
 
-			    //Entropy Service Call:
-			    if(entropy_client.call(entropy_srv) > 0)
-			    {
-				    //Save values for planning
-				    entropy_grid[i].entropy = entropy_srv.response.value;
-				    entropy_grid[i].ratioEstimate = entropy_srv.response.value/distanceCalculate(current_pose.position, entropy_grid[i].position);
+                //Entropy Service Call:
+                if(entropy_client.call(entropy_srv) > 0)
+                {
+                    //Save values for planning
+                    entropy_grid[i].entropy = entropy_srv.response.value;
+                    entropy_grid[i].ratioEstimate = entropy_srv.response.value/distanceCalculate(current_pose.position, entropy_grid[i].position);
 
-				    //Add test point (size of the marker depends on the entropy value)
-				    test_point.pose.position.x = entropy_grid[i].position.x;
-				    test_point.pose.position.y = entropy_grid[i].position.y;
-				    test_point.id = i;
-				    test_point.scale.x = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
-				    test_point.scale.y = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
-				    points_markers.markers.push_back(test_point);
+                    //Add test point (size of the marker depends on the entropy value)
+                    test_point.pose.position.x = entropy_grid[i].position.x;
+                    test_point.pose.position.y = entropy_grid[i].position.y;
+                    test_point.id = i;
+                    test_point.scale.x = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+                    test_point.scale.y = 0.6 * entropy_srv.response.value / MAX_ENTROPY;
+                    points_markers.markers.push_back(test_point);
 
-				    //Add text position  and value
-				    text_point.pose.position.x = entropy_grid[i].position.x;
-				    text_point.pose.position.y = entropy_grid[i].position.y;
-				    sprintf(output,"%.3f",entropy_srv.response.value);
-				    text_point.text = output;
-				    text_point.id = i;
-				    values_markers.markers.push_back(text_point);
+                    //Add text position  and value
+                    text_point.pose.position.x = entropy_grid[i].position.x;
+                    text_point.pose.position.y = entropy_grid[i].position.y;
+                    sprintf(output,"%.3f",entropy_srv.response.value);
+                    text_point.text = output;
+                    text_point.id = i;
+                    values_markers.markers.push_back(text_point);
 
-			    }
-			    else
-			    {
-				    ROS_ERROR("Failed to call plan service!");
-				    return 1;
-			    }
-		    }
+                }
+                else
+                {
+                    ROS_ERROR("Failed to call plan service!");
+                    return 1;
+                }
+            }
 
-		    //Publish Visualization Markers
-		    points_pub.publish(points_markers);
-		    text_pub.publish(values_markers);
+            //Publish Visualization Markers
+            points_pub.publish(points_markers);
+            text_pub.publish(values_markers);
 
-		    //Sort (qsort)
-		    qsort (entropy_grid, grid_length, sizeof(keypoints), comparekeypoints);
+            //Sort (qsort)
+            qsort (entropy_grid, grid_length, sizeof(keypoints), comparekeypoints);
 
-		    //Planning
-		    for(int i = 0; i < grid_length; i++)
-		    {
+            //Planning
+            for(int i = 0; i < grid_length; i++)
+            {
+                //get plan
+                plan_srv.request.goal.pose.position.x = entropy_grid[i].position.x;
+                plan_srv.request.goal.pose.position.y = entropy_grid[i].position.y;
 
-			    //get plan
-			    plan_srv.request.goal.pose.position.x = entropy_grid[i].position.x;
-			    plan_srv.request.goal.pose.position.y = entropy_grid[i].position.y;
+                path_lenght = 0.0;
 
-			    path_lenght = 0.0;
+                if(plan_client.call(plan_srv))//path received
+                {
+                    if((int) plan_srv.response.plan.poses.size() > 0)//path lenght is calculated
+                    {
 
-			    if(plan_client.call(plan_srv))
-			    {
-				    if((int) plan_srv.response.plan.poses.size() > 0)//path received and lenght is calculated
-				    {
+                        //lenght of the received path:
+                        path_lenght = distanceCalculate(current_pose.position,plan_srv.response.plan.poses[0].pose.position);
 
-					    //lenght of the received path:
-					    for(int j = 0; j < (int) plan_srv.response.plan.poses.size() - 1; j++)
-						    path_lenght += distanceCalculate(plan_srv.response.plan.poses[j].pose.position, plan_srv.response.plan.poses[j+1].pose.position);
+                        for(int j = 0; j < (int) plan_srv.response.plan.poses.size() - 1; j++)
+                            path_lenght += distanceCalculate(plan_srv.response.plan.poses[j].pose.position, plan_srv.response.plan.poses[j+1].pose.position);
 
-					    entropy_grid[i].dist = path_lenght;
+                        entropy_grid[i].dist = path_lenght;
 
-					    entropy_grid[i].ratio = entropy_grid[i].entropy/entropy_grid[i].dist;
+                        entropy_grid[i].ratio = entropy_grid[i].entropy/entropy_grid[i].dist;
 
-					    entropy_grid[i].reachable = true;
+                    }
+                    else
+                    {
+                        entropy_grid[i].dist = 0.0;
+                        entropy_grid[i].ratio = 0.0;
+                        entropy_grid[i].reachable = false;
+                    }
 
-					    if(entropy_grid[i].ratio > entropy_grid[i+1].ratioEstimate)
-					    {
-						    if(entropy_grid[i].reachable == true)
-						    {
-							    //move_base
-							    ROS_INFO("Moving to point (%f,%f)...", entropy_grid[i].position.x, entropy_grid[i].position.y);
-							    goal.target_pose.header.stamp = ros::Time::now();
-							    goal.target_pose.pose.position.x = entropy_grid[i].position.x;
-							    goal.target_pose.pose.position.y = entropy_grid[i].position.y;
-							    goal.target_pose.pose.orientation.w = 1.0;
+                    if(entropy_grid[i].ratio > max_ratio)
+                    {
+                        max_ratio = entropy_grid[i].ratio;
+                        max_ind = i;
+                    }
 
-							    ac.sendGoal(goal);
-							    ac.waitForResult();
+                    ROS_INFO("It: %d | Point: (%.1f,%.1f) | Entropy: %.3f | EstimatedRatio: %.3f | Ratio: %.3f | Next Estimated Ratio: %.3f", i, entropy_grid[i].position.x, entropy_grid[i].position.y, entropy_grid[i].entropy, entropy_grid[i].ratioEstimate, entropy_grid[i].ratio, entropy_grid[i+1].ratioEstimate);
+                    if(max_ratio > entropy_grid[i+1].ratioEstimate && entropy_grid[i].reachable == true)
+                    {
+                        //move_base
+                        ROS_INFO("Moving to point (%.1f,%.1f)...", entropy_grid[max_ind].position.x, entropy_grid[max_ind].position.y);
+                        goal.target_pose.header.stamp = ros::Time::now();
+                        goal.target_pose.pose.position.x = entropy_grid[max_ind].position.x;
+                        goal.target_pose.pose.position.y = entropy_grid[max_ind].position.y;
+                        goal.target_pose.pose.orientation.w = 1.0;
 
-							    if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
-								    ROS_INFO("Hooray!");
-							    else
-							    {
-								    entropy_grid[i].reachable = false;
-								    ROS_INFO("The base failed to move for some reason");
-							    }
-							    break;
-						    }
-						    else
-							    ROS_INFO("Point (%f,%f) not reachable! Trying next point...", entropy_grid[i].position.x, entropy_grid[i].position.y);
-					    }
-					    else
-					    {
-						    if(entropy_grid[i].ratio > max_ratio)
-						    {
-							    max_ratio = entropy_grid[i].ratio;
-							    max_ind = i;
-						    }
-					    }
+                        ac.sendGoal(goal);
+                        ac.waitForResult();
 
-				    }
-				    else//the path doesn't exist -> point is not reacheable and should be ignored
-				    {
-					    entropy_grid[i].reachable = false;
-					    entropy_grid[i].dist = 0;
-				    }
+                        if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
+                            ROS_INFO("Hooray!");
+                        else
+                        {
+                            entropy_grid[max_ind].reachable = false;
+                            ROS_INFO("The base failed to move for some reason");
+                        }
+                        break;
+                    }
 
-			    }
+                }
+            }
 
-		    }
-	    }
-	    catch (tf::TransformException ex)
-	    {
-		    ROS_ERROR("FreMeEn exploration could not estimate robot position %s",ex.what());
-		    return 0;
-	    }
 
-	    ros::spinOnce();
+        }
+        catch (tf::TransformException ex)
+        {
+            ROS_ERROR("FreMeEn exploration could not estimate robot position %s",ex.what());
+            return 0;
+        }
+
+        ros::spinOnce();
     }
     return 0;
 }
