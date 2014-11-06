@@ -12,15 +12,9 @@
 #include "fremen/Visualize.h"
 #include "nav_msgs/GetPlan.h"
 
-#define MIN_X  -5.8
-#define MIN_Y  -19.0
-#define MIN_Z  -0.0
-#define DIM_X 250
-#define DIM_Y 500
-#define DIM_Z 80
-#define RESOLUTION 0.05
-
 #define MAX_ENTROPY 132000
+double MIN_X,MIN_Y,MIN_Z,RESOLUTION;
+int DIM_X,DIM_Y,DIM_Z;
 
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
@@ -93,6 +87,14 @@ int main(int argc,char *argv[])
     ros::NodeHandle nh("~");
     nh.param("interval", entropy_step, 1.0);
 
+    n.getParam("/fremenGrid/minX",MIN_X);
+    n.getParam("/fremenGrid/minY",MIN_Y);
+    n.getParam("/fremenGrid/minZ",MIN_Z);
+    n.getParam("/fremenGrid/dimX",DIM_X);
+    n.getParam("/fremenGrid/dimY",DIM_Y);
+    n.getParam("/fremenGrid/dimZ",DIM_Z);
+    n.getParam("/fremenGrid/resolution",RESOLUTION);
+    printf("Grid params %.2lf %.2lf %.2lf %i %i %i %.2f\n",MIN_X,MIN_Y,MIN_Z,DIM_X,DIM_Y,DIM_Z,RESOLUTION);
 
     //tell the action client that we want to spin a thread by default
     MoveBaseClient ac("move_base", true);

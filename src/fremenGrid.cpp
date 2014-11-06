@@ -296,6 +296,15 @@ int main(int argc,char *argv[])
     ros::init(argc, argv, "fremengrid");
     ros::NodeHandle n;
     grid = new CFremenGrid(MIN_X,MIN_Y,MIN_Z,DIM_X,DIM_Y,DIM_Z,RESOLUTION);
+
+    n.setParam("/fremenGrid/minX",MIN_X);
+    n.setParam("/fremenGrid/minY",MIN_Y);
+    n.setParam("/fremenGrid/minZ",MIN_Z);
+    n.setParam("/fremenGrid/dimX",DIM_X);
+    n.setParam("/fremenGrid/dimY",DIM_Y);
+    n.setParam("/fremenGrid/dimZ",DIM_Z);
+    n.setParam("/fremenGrid/resolution",RESOLUTION);
+
     tf_listener    = new tf::TransformListener();
     image_transport::ImageTransport imageTransporter(n); 
 
