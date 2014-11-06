@@ -284,8 +284,7 @@ int main(int argc,char *argv[])
         }
         movePtu(0.0,0.0);
 
-        max_ind = 0;
-        max_ratio = 0.0;
+
 
         try
         {
@@ -345,6 +344,8 @@ int main(int argc,char *argv[])
             //Sort (qsort)
             qsort (entropy_grid, grid_length, sizeof(keypoints), comparekeypoints);
 
+            max_ind = 0;
+            max_ratio = 0.0;
             //Planning
             for(int i = 0; i < grid_length; i++)
             {
@@ -384,52 +385,48 @@ int main(int argc,char *argv[])
                     }
 
                     ROS_INFO("It: %d | Point: (%.1f,%.1f) | Entropy: %.3f | EstimatedRatio: %.3f | Ratio: %.3f | Next Estimated Ratio: %.3f", i, entropy_grid[i].position.x, entropy_grid[i].position.y, entropy_grid[i].entropy, entropy_grid[i].ratioEstimate, entropy_grid[i].ratio, entropy_grid[i+1].ratioEstimate);
-                    if(max_ratio > entropy_grid[i+1].ratioEstimate && entropy_grid[max_ind].reachable == true)
-                    {
-                        //move_base
-                        ROS_INFO("Moving to point (%.1f,%.1f)...", entropy_grid[max_ind].position.x, entropy_grid[max_ind].position.y);
-                        goal.target_pose.header.stamp = ros::Time::now();
-                        goal.target_pose.pose.position.x = entropy_grid[max_ind].position.x;
-                        goal.target_pose.pose.position.y = entropy_grid[max_ind].position.y;
-                        goal.target_pose.pose.orientation.w = 1.0;
-
-                        ac.sendGoal(goal);
-                        ac.waitForResult();
-
-                        if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
-                            ROS_INFO("Hooray!");
-                        else
-                        {
-                            entropy_grid[max_ind].reachable = false;
-                            ROS_INFO("The base failed to move for some reason");
-
-                            //move the robot (1 meter back)
-                            vel_msg.linear.x = -1.0;
-                            for(int a  = 0; a < 5; a++)
-                            {
-                                vel_pub.publish(vel_msg);
-                                usleep(400000);
-                            }
-
-                            vel_msg.linear.x = 0;
-                            vel_pub.publish(vel_msg);
-
-//                            //move_base
-//                            ROS_INFO("Moving to point (%.1f,%.1f)...", entropy_grid[max_ind].position.x, entropy_grid[max_ind].position.y);
-//                            goal.target_pose.header.stamp = ros::Time::now();
-//                            goal.target_pose.pose.position.x = entropy_grid[max_ind].position.x;
-//                            goal.target_pose.pose.position.y = entropy_grid[max_ind].position.y;
-//                            goal.target_pose.pose.orientation.w = 1.0;
-
-//                            ac.sendGoal(goal);
-//                            ac.waitForResult();
-                        }
-                        break;
-                    }
+                    if(max_ratio > entropy_grid[i+1].ratioEstimate && entropy_grid[max_ind].reachable == true) break;
 
                 }
             }
+            //move_base
+            ROS_INFO("Moving to point (%.1f,%.1f)...", entropy_grid[max_ind].position.x, entropy_grid[max_ind].position.y);
+            goal.target_pose.header.stamp = ros::Time::now();
+            goal.target_pose.pose.position.x = entropy_grid[max_ind].position.x;
+            goal.target_pose.pose.position.y = entropy_grid[max_ind].position.y;
+            goal.target_pose.pose.orientation.w = 1.0;
 
+            ac.sendGoal(goal);
+            ac.waitForResult();
+
+            if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
+                ROS_INFO("Hooray!");
+            else
+            {
+                entropy_grid[max_ind].reachable = false;
+                ROS_INFO("The base failed to move for some reason");
+
+                //move the robot (1 meter back)
+                vel_msg.linear.x = -1.0;
+                for(int a  = 0; a < 5; a++)
+                {
+                    vel_pub.publish(vel_msg);
+                    usleep(400000);
+                }
+
+                vel_msg.linear.x = 0;
+                vel_pub.publish(vel_msg);
+
+                //                            //move_base
+                //                            ROS_INFO("Moving to point (%.1f,%.1f)...", entropy_grid[max_ind].position.x, entropy_grid[max_ind].position.y);
+                //                            goal.target_pose.header.stamp = ros::Time::now();
+                //                            goal.target_pose.pose.position.x = entropy_grid[max_ind].position.x;
+                //                            goal.target_pose.pose.position.y = entropy_grid[max_ind].position.y;
+                //                            goal.target_pose.pose.orientation.w = 1.0;
+
+                //                            ac.sendGoal(goal);
+                //                            ac.waitForResult();
+            }
 
         }
         catch (tf::TransformException ex)
