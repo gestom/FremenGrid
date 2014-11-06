@@ -276,7 +276,7 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float range,float t
 			cellFree = prob < 0.7;
 			if (aux[cellIndex] == 0){
 				aux[cellIndex] = 1;
-				entropy-=(prob*log2f(prob)-residualEntropy);
+				entropy-=min(prob*log2f(prob)-residualEntropy,0);
 			}
 		}
 		//aux[cellIndex] = 2;
@@ -322,7 +322,7 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 			final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
 			if (aux[final] != 1){
 				aux[final] = 1;
-				if (d[i]==1) probs[final] = maxProb; else probs[final] = minProb;
+				if (d[i]==1) probs[final] = maxProb; //else probs[final] = minProb;
 				process[i] = 1;
 				processed++;
 			}
