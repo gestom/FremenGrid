@@ -13,11 +13,14 @@
 #include "nav_msgs/GetPlan.h"
 
 #define MAX_ENTROPY 132000
+
+bool drawEmptyCells = false;
+bool drawCells = true;
+
 double MIN_X,MIN_Y,MIN_Z,RESOLUTION;
 int DIM_X,DIM_Y,DIM_Z;
 
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
-bool displayFreeCells = false;
 
 using namespace std;
 
@@ -240,28 +243,29 @@ int main(int argc,char *argv[])
                 movePtu(pan[point],tilt[point]);
                 ros::spinOnce();
                 usleep(500000);
-
-                visualize_srv.request.red = visualize_srv.request.blue = 0.0;
-                visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
-                visualize_srv.request.minProbability = 0.9;
-                visualize_srv.request.maxProbability = 1.0;
-                visualize_srv.request.name = "occupied";
-                visualize_srv.request.type = 0;
-                visualize_client.call(visualize_srv);
-                ros::spinOnce();
-                usleep(100000);
-if (displayFreeCells){
-                visualize_srv.request.green = 0.0;
-                visualize_srv.request.red = 1.0;
-                visualize_srv.request.minProbability = 0.0;
-                visualize_srv.request.maxProbability = 0.1;
-                visualize_srv.request.alpha = 0.005;
-                visualize_srv.request.name = "free";
-                visualize_srv.request.type = 0;
-                visualize_client.call(visualize_srv);
-                ros::spinOnce();
-                usleep(100000);
-}
+                if(drawCells){
+                    visualize_srv.request.red = visualize_srv.request.blue = 0.0;
+                    visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
+                    visualize_srv.request.minProbability = 0.9;
+                    visualize_srv.request.maxProbability = 1.0;
+                    visualize_srv.request.name = "occupied";
+                    visualize_srv.request.type = 0;
+                    visualize_client.call(visualize_srv);
+                    ros::spinOnce();
+                    usleep(100000);
+                    if (drawEmptyCells){
+                        visualize_srv.request.green = 0.0;
+                        visualize_srv.request.red = 1.0;
+                        visualize_srv.request.minProbability = 0.0;
+                        visualize_srv.request.maxProbability = 0.1;
+                        visualize_srv.request.alpha = 0.005;
+                        visualize_srv.request.name = "free";
+                        visualize_srv.request.type = 0;
+                        visualize_client.call(visualize_srv);
+                        ros::spinOnce();
+                        usleep(100000);
+                    }
+                }
 
             }
             ros::spinOnce();
@@ -332,26 +336,23 @@ if (displayFreeCells){
             //Planning
             for(int i = 0; i < grid_length; i++)
             {
+
                 //get plan
                 plan_srv.request.goal.pose.position.x = entropy_grid[i].position.x;
                 plan_srv.request.goal.pose.position.y = entropy_grid[i].position.y;
 
                 path_lenght = 0.0;
 
-                if(plan_client.call(plan_srv))//path received
+                if(plan_client.call(plan_srv))
                 {
-                    if((int) plan_srv.response.plan.poses.size() > 0)//path lenght is calculated
+                    if((int) plan_srv.response.plan.poses.size() > 0)//path received and lenght is calculated
                     {
 
                         //lenght of the received path:
-                        path_lenght = distanceCalculate(current_pose.position,plan_srv.response.plan.poses[0].pose.position);
-
                         for(int j = 0; j < (int) plan_srv.response.plan.poses.size() - 1; j++)
                             path_lenght += distanceCalculate(plan_srv.response.plan.poses[j].pose.position, plan_srv.response.plan.poses[j+1].pose.position);
 
                         entropy_grid[i].dist = path_lenght;
-
-                        entropy_grid[i].ratio = entropy_grid[i].entropy/entropy_grid[i].dist;
 
                     }
                     else
@@ -367,7 +368,7 @@ if (displayFreeCells){
                         max_ind = i;
                     }
 
-                    ROS_INFO("It: %d | Point: (%.1f,%.1f) | Entropy: %.3f | Ratio: %.3f | Estimated Ratio %.3f | Next Estimated Ratio %.3f", i, entropy_grid[i].position.x, entropy_grid[i].position.y, entropy_grid[i].entropy, entropy_grid[i].ratio, entropy_grid[i].ratioEstimate, entropy_grid[i+1].ratioEstimate);
+                    ROS_INFO("It: %d | Point: (%.1f,%.1f) | Entropy: %.3f | Estimated Ratio: %.3f | Ratio: %.3f | Next Estimated Ratio: %.3f", i, entropy_grid[i].position.x, entropy_grid[i].position.y, entropy_grid[i].entropy, entropy_grid[i].ratioEstimate, entropy_grid[i].ratio, entropy_grid[i+1].ratioEstimate);
                     if(max_ratio > entropy_grid[i+1].ratioEstimate && entropy_grid[i].reachable == true)
                     {
                         //move_base
@@ -392,7 +393,6 @@ if (displayFreeCells){
 
                 }
             }
-
 
         }
         catch (tf::TransformException ex)
