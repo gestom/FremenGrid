@@ -13,6 +13,10 @@
 #include "nav_msgs/GetPlan.h"
 
 #define MAX_ENTROPY 132000
+
+bool drawEmptyCells = false;
+bool drawCells = true;
+
 double MIN_X,MIN_Y,MIN_Z,RESOLUTION;
 int DIM_X,DIM_Y,DIM_Z;
 
@@ -239,27 +243,29 @@ int main(int argc,char *argv[])
 			    movePtu(pan[point],tilt[point]);
 			    ros::spinOnce();
 			    usleep(500000);
-
-			    visualize_srv.request.red = visualize_srv.request.blue = 0.0;
-			    visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
-			    visualize_srv.request.minProbability = 0.9;
-			    visualize_srv.request.maxProbability = 1.0;
-			    visualize_srv.request.name = "occupied";
-			    visualize_srv.request.type = 0;
-			    visualize_client.call(visualize_srv);
-			    ros::spinOnce();
-			    usleep(100000);
-
-			    visualize_srv.request.green = 0.0;
-			    visualize_srv.request.red = 1.0;
-			    visualize_srv.request.minProbability = 0.0;
-			    visualize_srv.request.maxProbability = 0.1;
-			    visualize_srv.request.alpha = 0.005;
-			    visualize_srv.request.name = "free";
-			    visualize_srv.request.type = 0;
-			    visualize_client.call(visualize_srv);
-			    ros::spinOnce();
-			    usleep(100000);
+			    if(drawCells){
+				    visualize_srv.request.red = visualize_srv.request.blue = 0.0;
+				    visualize_srv.request.green = visualize_srv.request.alpha = 1.0;
+				    visualize_srv.request.minProbability = 0.9;
+				    visualize_srv.request.maxProbability = 1.0;
+				    visualize_srv.request.name = "occupied";
+				    visualize_srv.request.type = 0;
+				    visualize_client.call(visualize_srv);
+				    ros::spinOnce();
+				    usleep(100000);
+				    if (drawEmptyCells){
+					    visualize_srv.request.green = 0.0;
+					    visualize_srv.request.red = 1.0;
+					    visualize_srv.request.minProbability = 0.0;
+					    visualize_srv.request.maxProbability = 0.1;
+					    visualize_srv.request.alpha = 0.005;
+					    visualize_srv.request.name = "free";
+					    visualize_srv.request.type = 0;
+					    visualize_client.call(visualize_srv);
+					    ros::spinOnce();
+					    usleep(100000);
+				    }
+			    }
 
 		    }
 		    ros::spinOnce();
