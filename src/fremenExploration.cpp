@@ -14,6 +14,8 @@
 
 #define MAX_ENTROPY 132000
 
+float dconst = 6.0;
+
 bool drawEmptyCells = false;
 bool drawCells = true;
 
@@ -89,7 +91,7 @@ int main(int argc,char *argv[])
     ros::NodeHandle n;
 
     ros::NodeHandle nh("~");
-    nh.param("interval", entropy_step, 1.0);
+    nh.param("interval", entropy_step, 2.0);
 
     n.getParam("/fremenGrid/minX",MIN_X);
     n.getParam("/fremenGrid/minY",MIN_Y);
@@ -110,6 +112,16 @@ int main(int argc,char *argv[])
     //Publishers (Visualization of Points + Entropy Values)
     ros::Publisher points_pub = n.advertise<visualization_msgs::MarkerArray>("/entropy_points", 100);
     ros::Publisher text_pub = n.advertise<visualization_msgs::MarkerArray>("/entropy_values", 100);
+    ros::Publisher vel_pub = n.advertise<geometry_msgs::Twist>("/cmd_vel",100);
+
+    geometry_msgs::Twist vel_msg;
+    vel_msg.angular.x = 0.0;
+    vel_msg.angular.y = 0.0;
+    vel_msg.angular.z = 0.0;
+    vel_msg.linear.x = -1.0;
+    vel_msg.linear.y = 0.0;
+    vel_msg.linear.z = 0.0;
+
 
     //Subscribers
     ros::Subscriber ptu_sub = n.subscribe("/ptu/state", 10, ptuCallback);
@@ -300,7 +312,7 @@ int main(int argc,char *argv[])
                 {
                     //Save values for planning
                     entropy_grid[i].entropy = entropy_srv.response.value;
-                    entropy_grid[i].ratioEstimate = entropy_srv.response.value/distanceCalculate(current_pose.position, entropy_grid[i].position);
+                    entropy_grid[i].ratioEstimate = entropy_srv.response.value/(distanceCalculate(current_pose.position, entropy_grid[i].position) + dconst);
 
                     //Add test point (size of the marker depends on the entropy value)
                     test_point.pose.position.x = entropy_grid[i].position.x;
@@ -353,7 +365,7 @@ int main(int argc,char *argv[])
                         for(int j = 0; j < (int) plan_srv.response.plan.poses.size() - 1; j++)
                             path_lenght += distanceCalculate(plan_srv.response.plan.poses[j].pose.position, plan_srv.response.plan.poses[j+1].pose.position);
 
-                        entropy_grid[i].dist = path_lenght;
+                        entropy_grid[i].dist = path_lenght + dconst;
 
                         entropy_grid[i].ratio = entropy_grid[i].entropy/entropy_grid[i].dist;
 
@@ -372,7 +384,7 @@ int main(int argc,char *argv[])
                     }
 
                     ROS_INFO("It: %d | Point: (%.1f,%.1f) | Entropy: %.3f | EstimatedRatio: %.3f | Ratio: %.3f | Next Estimated Ratio: %.3f", i, entropy_grid[i].position.x, entropy_grid[i].position.y, entropy_grid[i].entropy, entropy_grid[i].ratioEstimate, entropy_grid[i].ratio, entropy_grid[i+1].ratioEstimate);
-                    if(max_ratio > entropy_grid[i+1].ratioEstimate && entropy_grid[i].reachable == true)
+                    if(max_ratio > entropy_grid[i+1].ratioEstimate && entropy_grid[max_ind].reachable == true)
                     {
                         //move_base
                         ROS_INFO("Moving to point (%.1f,%.1f)...", entropy_grid[max_ind].position.x, entropy_grid[max_ind].position.y);
@@ -390,6 +402,27 @@ int main(int argc,char *argv[])
                         {
                             entropy_grid[max_ind].reachable = false;
                             ROS_INFO("The base failed to move for some reason");
+
+                            //move the robot (1 meter back)
+                            vel_msg.linear.x = -1.0;
+                            for(int a  = 0; a < 5; a++)
+                            {
+                                vel_pub.publish(vel_msg);
+                                usleep(400000);
+                            }
+
+                            vel_msg.linear.x = 0;
+                            vel_pub.publish(vel_msg);
+
+//                            //move_base
+//                            ROS_INFO("Moving to point (%.1f,%.1f)...", entropy_grid[max_ind].position.x, entropy_grid[max_ind].position.y);
+//                            goal.target_pose.header.stamp = ros::Time::now();
+//                            goal.target_pose.pose.position.x = entropy_grid[max_ind].position.x;
+//                            goal.target_pose.pose.position.y = entropy_grid[max_ind].position.y;
+//                            goal.target_pose.pose.orientation.w = 1.0;
+
+//                            ac.sendGoal(goal);
+//                            ac.waitForResult();
                         }
                         break;
                     }
