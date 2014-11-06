@@ -128,7 +128,7 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float range,float t
 		float *z = (float*)malloc(sizeof(float)*10000000);	
 		int size = 0;
 		float phiStep;
-		float granularity = resolution/range/4;
+		float granularity = resolution/range/5;
 		float rx,ry,rz,ax,ay,az,bx,by,bz,cx,cy,cz;
 		int ix,iy,iz,index,final,xStep,yStep,zStep;
 
@@ -177,7 +177,7 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float range,float t
 
 		//pre-calculate the grid 
 		int raycastSize = sizeof(int)*300*numRaycasters;
-		printf("Cells %i %i\n",numRaycasters,raycastSize);
+		printf("Rays total %i raycast memory size %i\n",numRaycasters,raycastSize);
 		raycasters  = (int*)malloc(raycastSize);
 		int raycastIndex = 0;
 		for (int i = 0;i<size;i++)
@@ -279,10 +279,10 @@ float CFremenGrid::getInformation(float sx,float sy,float sz,float range,float t
 				entropy-=(prob*log2f(prob)-residualEntropy);
 			}
 		}
-		aux[cellIndex] = 2;
+		//aux[cellIndex] = 2;
 		rayIndex=castLength;
 	}
-	if (debug) printf("Entropy to preprocess, prepare, raycast and calculate %i %i %i %i %.0f \n",preprocess,prepare,calculate,timer.getTime(),entropy);
+	printf("Entropy %.0f took %i ms to preprocess, %i ms to prepare, %i ms to raycast and %i to calculate.\n",entropy,preprocess,prepare,calculate,timer.getTime());
 	return entropy;
 }
 
@@ -299,13 +299,9 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 	bool subsample = true;
 	float maxRange = 4.0;
 
-	/*if (isnormal(points.points[i].x) == 0)
-	{
-			rx = (x[i]-px);
-			ry = (y[i]-py);
-			rz = (z[i]-pz);
-	}*/
 	memset(aux,0,numCells*sizeof(char));
+
+	int processed=0;
 	//rescale ray intersections to match the grid
 	if (subsample == false){
 		//rescale all
@@ -320,18 +316,19 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 		//rescale only one ray per cell, adjust ray direction to go to the ray centre 
 		memset(process,0,size);
 		for (int i = 0;i<size+1;i++){
-			x[i] = fmin(fmax(floor((x[i]-oX)/resolution),0)+0.5,xDim-1);
-			y[i] = fmin(fmax(floor((y[i]-oY)/resolution),0)+0.5,yDim-1);
-			z[i] = fmin(fmax(floor((z[i]-oZ)/resolution),0)+0.5,zDim-1);
+			x[i] = fmin(fmax(floor((x[i]-oX)/resolution),1)+0.5,xDim-1);
+			y[i] = fmin(fmax(floor((y[i]-oY)/resolution),1)+0.5,yDim-1);
+			z[i] = fmin(fmax(floor((z[i]-oZ)/resolution),1)+0.5,zDim-1);
 			final = (int)x[i]+xDim*((int)y[i]+yDim*((int)z[i]));
 			if (aux[final] != 1){
 				aux[final] = 1;
 				if (d[i]==1) probs[final] = maxProb; else probs[final] = minProb;
 				process[i] = 1;
+				processed++;
 			}
 		}
 	}
-	printf("Rescaling %i\n",timer.getTime());
+	printf("rescaling from %i rays to %i rays took %i ms, ",size,processed,timer.getTime());
 	//raycast origin in float and int 
 	int i = 0;
 	//calculate the point of origin
@@ -344,7 +341,7 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 	startIndex =  (int)px+xDim*((int)py+yDim*((int)pz));
 	int prepare  = 0;
 	int calculate = 0;;
-
+	int cells = 0;
 	for (int i = 0;i<size;i++)
 	{
 		timer.reset();
@@ -394,9 +391,9 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 			//if (debug) printf("Indices %i %i %.2f %.2f %.2f %.2f %.2f %.2f \n",index,final,bx,by,bz,cx,cy,cz);
 			prepare += timer.getTime();
 			timer.reset();
-		
+			int j = 0;	
 			// start the grid traversal process 
-			for (int j=0;index!=final;j++)
+			for (j=0;index!=final;j++)
 			{
 				//if (debug) printf("Index %06i %06i %06i %.2f %.2f %.2f %.2f\n",index,final,startIndex,bx,bx*rx+px,by*ry+py,bz*rz+pz);
 				if (aux[index] == 0){
@@ -417,11 +414,12 @@ void CFremenGrid::incorporate(float *x,float *y,float *z,float *d,int size)
 					index+=zStep;
 				}
 			}
+			cells+=j;
 			calculate += timer.getTime();
 		}
 	}
-	printf("Times to prepare and calculate %i %i \n",prepare,calculate);
-}
+	printf("preparation %i ms and update of %i cells took %i ms.\n",prepare,cells,calculate);
+} 
 
 void CFremenGrid::save(const char* filename,bool lossy,int forceOrder)
 {

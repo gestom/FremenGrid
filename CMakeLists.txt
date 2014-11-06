@@ -6,17 +6,12 @@ find_package(catkin REQUIRED COMPONENTS  pcl_conversions pcl_ros roscpp rospy st
 set ( CMAKE_CXX_FLAGS "-Ofast -march=native -mno-avx -ggdb")
 #set ( CMAKE_CXX_FLAGS "-ggdb")
 
-include_directories(${OCTOMAP_INCLUDE_DIRS}) 
-link_libraries( ${OCTOMAP_LIBRARIES}) 
-
-#add_action_files(FILES)
-
 add_service_files(
 		FILES
+		Entropy.srv
 		SaveLoad.srv
 		AddView.srv
 		Visualize.srv
-		Entropy.srv
 )
 
 generate_messages(

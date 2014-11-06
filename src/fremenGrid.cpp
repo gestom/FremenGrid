@@ -25,7 +25,7 @@
 #ifdef BHAM_LARGE
 #define MIN_X  -18.2
 #define MIN_Y  -31.0 
-#define MIN_Z  0.0
+#define MIN_Z  -0.0
 #define DIM_X 560 
 #define DIM_Y 990 
 #define DIM_Z 60 
@@ -34,7 +34,7 @@
 #ifdef BHAM_SMALL
 #define MIN_X  -5.8
 #define MIN_Y  -19.0 
-#define MIN_Z  0.0
+#define MIN_Z  -0.0
 #define DIM_X 250 
 #define DIM_Y 500 
 #define DIM_Z 80 
@@ -43,7 +43,7 @@
 #ifdef UOL_SMALL 
 #define MIN_X  -7
 #define MIN_Y  -5.6 
-#define MIN_Z  0.0
+#define MIN_Z  -0.0
 #define DIM_X 280 
 #define DIM_Y 450 
 #define DIM_Z 80 
@@ -240,7 +240,6 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 	float di,psi,phi,phiPtu,psiPtu,xPtu,yPtu,zPtu,ix,iy,iz;
 	int cnt = 0;
 	di=psi=phi=phiPtu=psiPtu=xPtu=yPtu=zPtu=0;
-
 	if (integrateMeasurements == 3)
 	{
 		tf::StampedTransform st;
@@ -252,6 +251,9 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 			ROS_ERROR("FreMEn map cound not incorporate the latest depth map %s",ex.what());
 			return;
 		}
+		CTimer timer;
+		timer.reset();
+		timer.start();
 		x[len] = xPtu = st.getOrigin().x();
 		y[len] = yPtu = st.getOrigin().y();
 		z[len] = zPtu = st.getOrigin().z();
@@ -281,10 +283,11 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 				cnt++;	
 			}
 		}
+		printf("Depth image to point cloud took %i ms,",timer.getTime());
 		grid->incorporate(x,y,z,d,len);
 		//printf("Grid updated %i \n",timer.getTime());	
 		integrateMeasurements=0;
-		printf("XXX: %i %i %i %i %s %.3f\n",len,cnt,msg->width,msg->height,msg->encoding.c_str(),depth);
+		//printf("XXX: %i %i %i %i %s %.3f\n",len,cnt,msg->width,msg->height,msg->encoding.c_str(),depth);
 	}
 }
 
