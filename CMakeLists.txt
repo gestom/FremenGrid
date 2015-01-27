@@ -12,6 +12,7 @@ add_service_files(
 		SaveLoad.srv
 		AddView.srv
 		Visualize.srv
+		FlatGrid.srv
 )
 
 generate_messages(
@@ -26,16 +27,29 @@ include_directories(${catkin_INCLUDE_DIRS})
 
 add_executable(fremengrid src/fremenGrid.cpp)
 add_executable(exploration src/fremenExploration.cpp)
+#add_executable(load src/load.cpp)
+add_executable(flat src/flat_simulation.cpp)
+add_executable(flat_generate_grids src/flat_generate_grids.cpp)
 add_executable(grid_planning src/GridPlanning.cpp)
+add_executable(flat_diff src/flat_diff.cpp)
 
 add_library(frelement src/CFrelement.cpp)
 add_library(fremen_timer src/CTimer.cpp)
 add_library(fremengridlib src/CFremenGrid.cpp)
+
 
 target_link_libraries(frelement fremen_timer)
 target_link_libraries(fremengridlib frelement)
 target_link_libraries(fremengrid fremengridlib)
 target_link_libraries(fremengrid ${catkin_LIBRARIES})
 
+
+target_link_libraries(flat_diff fremengridlib)
+
+
 target_link_libraries(exploration ${catkin_LIBRARIES})
 target_link_libraries(grid_planning ${catkin_LIBRARIES})
+target_link_libraries(flat ${catkin_LIBRARIES})
+target_link_libraries(flat_generate_grids ${catkin_LIBRARIES})
+target_link_libraries(flat_diff ${catkin_LIBRARIES})
+

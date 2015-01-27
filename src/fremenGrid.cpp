@@ -20,7 +20,7 @@
 #include "fremen/Visualize.h"
 #include <std_msgs/String.h>
 
-#define BHAM_LARGE
+#define FLAT
 
 #ifdef BHAM_LARGE
 #define MIN_X  -18.2
@@ -49,9 +49,27 @@
 #define DIM_Z 80 
 #endif
 
-#define CAMERA_RANGE 4.0 
+#ifdef FLAT
+#define MIN_X  -5.0
+#define MIN_Y  -5.0
+#define MIN_Z  -0.0
+#define DIM_X  250
+#define DIM_Y 200
+#define DIM_Z 80
+#endif
 
-#define RESOLUTION 0.05 
+#ifdef EMPTY
+#define MIN_X  -18.2
+#define MIN_Y  -31.0
+#define MIN_Z  -0.0
+#define DIM_X 560
+#define DIM_Y 990
+#define DIM_Z 60
+#endif
+
+#define CAMERA_RANGE 4.0
+
+#define RESOLUTION 0.1
 
 using namespace std;
 
@@ -81,8 +99,9 @@ bool saveGrid(fremen::SaveLoad::Request  &req, fremen::SaveLoad::Response &res)
 
 void points(const sensor_msgs::PointCloud2ConstPtr& points2)
 {
+
 	CTimer timer;
-	if (integrateMeasurements == 20){
+    if (integrateMeasurements == 20){
 		timer.reset();
 		timer.start();
 		sensor_msgs::PointCloud points1,points;
@@ -270,7 +289,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 				di = (msg->data[cnt*2]+256*msg->data[cnt*2+1])/1000.0;
 				//printf("%f.3\n",di);
 				d[cnt] = 1;
-				if (di < 0.05){
+                if (di < 0.05 || di > CAMERA_RANGE){
 					di = CAMERA_RANGE;
 					d[cnt] = 0;
 				}
