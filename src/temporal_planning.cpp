@@ -15,7 +15,7 @@
 #include "fremen/SaveLoad.h"
 #include "nav_msgs/GetPlan.h"
 
-#define N 6
+#define N 4
 
 #define MAX_ENTROPY 450000
 
@@ -43,8 +43,8 @@ ros::ServiceClient *entropy_client_ptr;
 
  ros::Publisher *points_pub_ptr;
 
- float x[] = {-1.6, -1.5, 0.1, 3.17, 6.1, 2.6, 3.0};
- float y[] = {3.4, -0.3, -1.4, -1.3, -1.14, 1.4, 3.0};
+ float x[] = {-1.5, -2.6,-8.6, -5.7};
+ float y[] = {-8.4, -1.7, -1.0, -8.6};
 
 void execute(const fremen::PlanningGoalConstPtr& goal, Server* as)
 {

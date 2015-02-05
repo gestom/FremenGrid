@@ -26,7 +26,6 @@ catkin_package(CATKIN_DEPENDS roscpp message_runtime pcl_conversions pcl_ros std
 
 include_directories(${catkin_INCLUDE_DIRS}) 
 
-
 add_executable(fremengrid src/fremenGrid.cpp)
 add_executable(exploration src/fremenExploration.cpp)
 add_executable(temporal_exploration src/temporal_exploration.cpp)
@@ -59,3 +58,8 @@ target_link_libraries(flat ${catkin_LIBRARIES})
 target_link_libraries(flat_generate_grids ${catkin_LIBRARIES})
 target_link_libraries(flat_diff ${catkin_LIBRARIES})
 
+add_dependencies(fremengrid ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(exploration ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(temporal_exploration ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(temporal_planning ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(flat_generate_grids ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
