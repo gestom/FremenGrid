@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(fremen)
 
 
-find_package(catkin REQUIRED COMPONENTS  pcl_conversions pcl_ros roscpp rospy std_msgs visualization_msgs geometry_msgs genmsg sensor_msgs image_transport)
+find_package(catkin REQUIRED COMPONENTS  pcl_conversions pcl_ros roscpp rospy std_msgs visualization_msgs geometry_msgs genmsg actionlib_msgs actionlib sensor_msgs image_transport)
 set ( CMAKE_CXX_FLAGS "-Ofast -march=native -mno-avx -ggdb")
 #set ( CMAKE_CXX_FLAGS "-ggdb")
 
@@ -15,18 +15,22 @@ add_service_files(
 		FlatGrid.srv
 )
 
+add_action_files(DIRECTORY action FILES Planning.action)
+
 generate_messages(
 	DEPENDENCIES
-	std_msgs actionlib_msgs
+	std_msgs geometry_msgs actionlib_msgs
 )
 
-catkin_package(CATKIN_DEPENDS roscpp message_runtime pcl_conversions pcl_ros std_msgs genmsg actionlib_msgs)
+catkin_package(CATKIN_DEPENDS roscpp message_runtime pcl_conversions pcl_ros std_msgs genmsg actionlib_msgs strands_navigation)
 
 include_directories(${catkin_INCLUDE_DIRS}) 
 
 
 add_executable(fremengrid src/fremenGrid.cpp)
 add_executable(exploration src/fremenExploration.cpp)
+add_executable(temporal_exploration src/temporal_exploration.cpp)
+add_executable(temporal_planning src/temporal_planning.cpp)
 #add_executable(load src/load.cpp)
 add_executable(flat src/flat_simulation.cpp)
 add_executable(flat_generate_grids src/flat_generate_grids.cpp)
@@ -48,6 +52,8 @@ target_link_libraries(flat_diff fremengridlib)
 
 
 target_link_libraries(exploration ${catkin_LIBRARIES})
+target_link_libraries(temporal_exploration ${catkin_LIBRARIES})
+target_link_libraries(temporal_planning ${catkin_LIBRARIES})
 target_link_libraries(grid_planning ${catkin_LIBRARIES})
 target_link_libraries(flat ${catkin_LIBRARIES})
 target_link_libraries(flat_generate_grids ${catkin_LIBRARIES})

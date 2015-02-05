@@ -5,7 +5,7 @@
 #include <move_base_msgs/MoveBaseAction.h>
 #include <actionlib/client/simple_action_client.h>
 #include <sensor_msgs/JointState.h>
-//#include <ros/move_base.h>
+
 #include <fstream>
 
 #include "fremen/Entropy.h"
@@ -13,6 +13,10 @@
 #include "fremen/Visualize.h"
 #include "fremen/SaveLoad.h"
 #include "nav_msgs/GetPlan.h"
+
+#include <dynamic_reconfigure/DoubleParameter.h>
+#include <dynamic_reconfigure/Reconfigure.h>
+#include <dynamic_reconfigure/Config.h>
 
 #define MAX_ENTROPY 132000
 
