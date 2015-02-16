@@ -15,7 +15,7 @@ add_service_files(
 		FlatGrid.srv
 )
 
-add_action_files(DIRECTORY action FILES Planning.action)
+add_action_files(DIRECTORY action FILES Plan.action)
 
 generate_messages(
 	DEPENDENCIES
@@ -28,8 +28,8 @@ include_directories(${catkin_INCLUDE_DIRS})
 
 add_executable(fremengrid src/fremenGrid.cpp)
 add_executable(exploration src/fremenExploration.cpp)
-add_executable(temporal_exploration src/temporal_exploration.cpp)
-add_executable(temporal_planning src/temporal_planning.cpp)
+add_executable(exploration_executioner src/exploration_executioner.cpp)
+add_executable(exploration_planner src/exploration_planner.cpp)
 #add_executable(load src/load.cpp)
 add_executable(flat src/flat_simulation.cpp)
 add_executable(flat_generate_grids src/flat_generate_grids.cpp)
@@ -51,8 +51,8 @@ target_link_libraries(flat_diff fremengridlib)
 
 
 target_link_libraries(exploration ${catkin_LIBRARIES})
-target_link_libraries(temporal_exploration ${catkin_LIBRARIES})
-target_link_libraries(temporal_planning ${catkin_LIBRARIES})
+target_link_libraries(exploration_executioner ${catkin_LIBRARIES})
+target_link_libraries(exploration_planner ${catkin_LIBRARIES})
 target_link_libraries(grid_planning ${catkin_LIBRARIES})
 target_link_libraries(flat ${catkin_LIBRARIES})
 target_link_libraries(flat_generate_grids ${catkin_LIBRARIES})
@@ -60,6 +60,6 @@ target_link_libraries(flat_diff ${catkin_LIBRARIES})
 
 add_dependencies(fremengrid ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 add_dependencies(exploration ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
-add_dependencies(temporal_exploration ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
-add_dependencies(temporal_planning ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(exploration_executioner ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(exploration_planner ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 add_dependencies(flat_generate_grids ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
