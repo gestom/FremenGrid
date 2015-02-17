@@ -15,7 +15,7 @@ add_service_files(
 		FlatGrid.srv
 )
 
-add_action_files(DIRECTORY action FILES Plan.action)
+add_action_files(DIRECTORY action FILES Plan.action Execution.action)
 
 generate_messages(
 	DEPENDENCIES
