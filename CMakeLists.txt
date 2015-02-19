@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(fremen)
 
 
-find_package(catkin REQUIRED COMPONENTS  pcl_conversions pcl_ros roscpp rospy std_msgs visualization_msgs geometry_msgs genmsg actionlib_msgs actionlib sensor_msgs image_transport)
+find_package(catkin REQUIRED COMPONENTS  pcl_conversions pcl_ros roscpp rospy std_msgs visualization_msgs geometry_msgs genmsg actionlib_msgs actionlib sensor_msgs image_transport OpenCV)
 set ( CMAKE_CXX_FLAGS "-Ofast -march=native -mno-avx -ggdb")
 #set ( CMAKE_CXX_FLAGS "-ggdb")
 
@@ -24,7 +24,7 @@ generate_messages(
 
 catkin_package(CATKIN_DEPENDS roscpp message_runtime pcl_conversions pcl_ros std_msgs genmsg actionlib_msgs strands_navigation)
 
-include_directories(${catkin_INCLUDE_DIRS}) 
+include_directories(${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS}) 
 
 add_executable(fremengrid src/fremenGrid.cpp)
 add_executable(exploration src/fremenExploration.cpp)
@@ -51,7 +51,7 @@ target_link_libraries(flat_diff fremengridlib)
 
 
 target_link_libraries(exploration ${catkin_LIBRARIES})
-target_link_libraries(exploration_executioner ${catkin_LIBRARIES})
+target_link_libraries(exploration_executioner ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 target_link_libraries(exploration_planner ${catkin_LIBRARIES})
 target_link_libraries(grid_planning ${catkin_LIBRARIES})
 target_link_libraries(flat ${catkin_LIBRARIES})

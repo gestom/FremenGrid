@@ -20,7 +20,7 @@
 #include "fremen/Visualize.h"
 #include <std_msgs/String.h>
 
-#define WW
+#define FLAT_BIG
 
 #ifdef WW
 #define MIN_X  -12.0

@@ -4,9 +4,10 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <move_base_msgs/MoveBaseAction.h>
 #include <geometry_msgs/PoseArray.h>
-#include <fremen/PlanningAction.h>
+#include <fremen/PlanAction.h>
 #include <actionlib/server/simple_action_server.h>
 #include <actionlib/client/simple_action_client.h>
+#include <opencv/cv.h>
 
 
 #include "fremen/Entropy.h"
@@ -14,8 +15,6 @@
 #include "fremen/Visualize.h"
 #include "fremen/SaveLoad.h"
 #include "nav_msgs/GetPlan.h"
-
-#define N 4
 
 #define MAX_ENTROPY 450000
 
@@ -25,15 +24,23 @@ int DIM_X,DIM_Y,DIM_Z;
 ros::ServiceClient *save_client_ptr;
 
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
-typedef actionlib::SimpleActionServer<fremen::PlanningAction> Server;
+typedef actionlib::SimpleActionServer<fremen::PlanAction> Server;
+
+typedef struct
+{
+    int x;
+    int y;
+    double value;
+}
+maxima;
+
+int numCellsX, numCellsY;
 
 using namespace std;
 
-float* entropies;
-
 //Parameteres
 double sensor_range, entropies_step;
-int *numCellsX_ptr, *numCellsY_ptr;
+int radius;
 
 MoveBaseClient *ac_ptr;
 
@@ -41,18 +48,15 @@ tf::TransformListener *tf_listener_ptr;
 
 ros::ServiceClient *entropy_client_ptr;
 
- ros::Publisher *points_pub_ptr;
+ros::Publisher *points_pub_ptr, *max_pub_ptr;
 
- float x[] = {-1.5, -2.6,-8.6, -5.7};
- float y[] = {-8.4, -1.7, -1.0, -8.6};
-
-void execute(const fremen::PlanningGoalConstPtr& goal, Server* as)
+void execute(const fremen::PlanGoalConstPtr& goal, Server* as)
 {
 
     ROS_INFO("Generating goals for timestamp %f", goal->timestamp);
     as->acceptNewGoal();
 
-    fremen::PlanningResult result;
+    fremen::PlanResult result;
     geometry_msgs::Pose pose;
 
     //update entropy grid and publishes markers
@@ -62,7 +66,7 @@ void execute(const fremen::PlanningGoalConstPtr& goal, Server* as)
     entropy_srv.request.t = 0.0;
 
     //Markers Initialization
-    visualization_msgs::MarkerArray points_markers;
+    visualization_msgs::MarkerArray points_markers, maximas_makers;
 
     visualization_msgs::Marker test_point;
     test_point.header.frame_id = "/map";
@@ -79,20 +83,58 @@ void execute(const fremen::PlanningGoalConstPtr& goal, Server* as)
     test_point.scale.x = entropies_step;
     test_point.scale.y = entropies_step;
 
+    visualization_msgs::Marker local_point;
+    local_point.header.frame_id = "/map";
+    local_point.header.stamp = ros::Time::now();
+    local_point.ns = "my_namespace";
+    local_point.action = visualization_msgs::Marker::ADD;
+    local_point.type = visualization_msgs::Marker::CYLINDER;
+    local_point.color.a = 0.8;
+    local_point.color.r = 1.0;
+    local_point.color.g = 0.0;
+    local_point.color.b = 0.0;
+    local_point.scale.z = 2*entropies_step;
+    local_point.pose.position.z = 0.1 + local_point.scale.z/2;
+    local_point.pose.orientation.w = 1.0;
+    local_point.scale.x = entropies_step;
+    local_point.scale.y = entropies_step;
+
+
+
+//    ROS_INFO("%d x %d", numCellsX, numCellsY);
+
+    //    FILE *f = fopen("/home/santos/entopies.txt", "w");
+    //    if (f == NULL)
+    //    {
+    //        printf("Error opening file!\n");
+    //        exit(1);
+    //    }
+
+
+    //entropies grid
+    double entropies[numCellsX][numCellsY];
+
+    //auxiliary entropies grid:
+    double entropies_aux[numCellsX + radius*2][numCellsY + radius*2];
+    memset(entropies_aux, 0, sizeof entropies_aux);
+
+    ROS_INFO("updating grid...");
 
     //update grid
     int ind = 0;
-    for(int i = 0; i < *numCellsX_ptr; i++)
+    for(int i = 0; i < numCellsX; i++)
     {
-        for(int j = 0; j < *numCellsY_ptr; j++)
+        for(int j = 0; j < numCellsY; j++)
         {
-            entropy_srv.request.x = MIN_X + entropies_step*i;
-            entropy_srv.request.y = MIN_Y + entropies_step*j;
+            entropy_srv.request.x = MIN_X + entropies_step*(i+0.5);
+            entropy_srv.request.y = MIN_Y + entropies_step*(j+0.5);
 
             //Entropy Service Call:
             if(entropy_client_ptr->call(entropy_srv) > 0)
             {
-                entropies[ind] = entropy_srv.response.value;
+                entropies[i][j] = entropy_srv.response.value;
+                entropies_aux[i + radius][j + radius] = entropies[i][j];
+                //                fprintf(f, "%f\n", entropies[ind]);
                 test_point.pose.position.x = entropy_srv.request.x;
                 test_point.pose.position.y = entropy_srv.request.y;
                 test_point.id = ind;
@@ -113,21 +155,76 @@ void execute(const fremen::PlanningGoalConstPtr& goal, Server* as)
         }
     }
 
-    points_pub_ptr->publish(points_markers);
 
-    //TODO - Generate goals (plan)
-    for(int i = 0; i < N; i++)
+    /*** Mask ***/
+    double mask[radius*2+1][radius*2+1];
+    double d;
+    float r =radius;
+    for(int y = 0; y < radius*2+1; y++)
     {
-        pose.position.x = x[i];
-        pose.position.y = y[i];
-        pose.position.z = 0.0;
-        pose.orientation.w = 1.0;
-        result.locations.header.frame_id = "map";
-        result.locations.poses.push_back(pose);
+        for(int x = 0; x < radius*2+1; x++)
+        {
+            d = sqrt(pow(x-r, 2) + pow(y-r,2))/r;
+            mask[y][x] = fmax(fmin(d,1.0),0.0);
+            printf("%f ", mask[y][x]);
+        }
+
+        printf("\n");
     }
+
+    /*** Get maximas ***/
+    ROS_INFO("Getting local maximas...");
+    vector<maxima> local_maximas;
+    maxima last_max, final_max;
+
+    for(int w = 0; w < goal->max_loc; w++)
+    {
+        last_max.value = 0;
+        last_max.x = 1;
+        last_max.y = 1;
+
+        for(int y = 0; y < numCellsX + radius*2; y++)
+        {
+            for(int x = 0; x < numCellsY + radius*2; x++)
+            {
+                if(last_max.value < entropies_aux[y][x])
+                {
+                    last_max.value = entropies_aux[y][x];
+                    last_max.x = x;
+                    last_max.y = y;
+//                    ROS_INFO("Max: (%d,%d) -> %f", last_max.x, last_max.y, last_max.value);
+                }
+            }
+        }
+
+        final_max.x = last_max.x - radius;
+        final_max.y = last_max.y - radius;
+        final_max.value = last_max.value;
+        local_maximas.push_back(final_max);
+
+        local_point.id = w;
+        local_point.pose.position.y = MIN_X + entropies_step*final_max.x;
+        local_point.pose.position.x = MIN_Y + entropies_step*final_max.y;
+        maximas_makers.markers.push_back(local_point);
+
+        for(int y = 0; y < radius*2 + 1; y++)
+        {
+            for(int x = 0; x < radius*2 + 1; x++)
+            {
+                double nhecos = entropies_aux[final_max.y + y][final_max.x + x];
+                entropies_aux[final_max.y + y][final_max.x + x] = entropies_aux[final_max.y + y][final_max.x + x] * mask[y][x];
+//                ROS_INFO("(%d,%d) -> %f * %f = %f", final_max.y + y, final_max.x + x, nhecos, mask[y][x], entropies_aux[final_max.y + y][final_max.x + x]);
+            }
+        }
+    }
+
+    /*** Path planning ***/
+    ROS_INFO("planning the path...");
+
 
     //send goals
     points_pub_ptr->publish(points_markers);
+    max_pub_ptr->publish(maximas_makers);
     as->setSucceeded(result);
 
 }
@@ -140,6 +237,7 @@ int main(int argc,char *argv[])
     ros::NodeHandle nh("~");
     nh.param("entropies_step", entropies_step, 0.5);
     nh.param("sensor_range", sensor_range, 4.6);
+    nh.param("radius", radius, 6);
 
     n.getParam("/fremenGrid/minX",MIN_X);
     n.getParam("/fremenGrid/minY",MIN_Y);
@@ -151,15 +249,10 @@ int main(int argc,char *argv[])
     printf("Grid params %.2lf %.2lf %.2lf %i %i %i %.2f\n",MIN_X,MIN_Y,MIN_Z,DIM_X,DIM_Y,DIM_Z,RESOLUTION);
 
 
-    int numCellsX = (RESOLUTION*DIM_X) / entropies_step;
-    numCellsX_ptr = &numCellsX;
-    int numCellsY = (RESOLUTION*DIM_Y) / entropies_step;
-    numCellsY_ptr = &numCellsY;
+    numCellsX = (RESOLUTION*(DIM_X)) / entropies_step;
+    numCellsY = (RESOLUTION*(DIM_Y)) / entropies_step;
 
-    ROS_INFO("numCells: %d", numCellsX*numCellsY);
-
-    //entropies grid
-    entropies = (float*) malloc((numCellsX*numCellsY)*sizeof(float));
+    ROS_INFO("entropies grid %d x %d -> numCells: %d", numCellsX, numCellsY, numCellsX*numCellsY);
 
     //tell the action client that we want to spin a thread by default
     MoveBaseClient ac("move_base", true);
@@ -186,13 +279,16 @@ int main(int argc,char *argv[])
     ros::Publisher points_pub = n.advertise<visualization_msgs::MarkerArray>("/entropy_grid", 100);
     points_pub_ptr = &points_pub;
 
+    ros::Publisher max_pub = n.advertise<visualization_msgs::MarkerArray>("/maximas", 100);
+    max_pub_ptr = &max_pub;
+
     //get robot pose
     tf::StampedTransform st;
 
-    Server server(n, "planning", boost::bind(&execute, _1, &server), false);
+    Server server(n, "planner", boost::bind(&execute, _1, &server), false);
     server.start();
 
     ros::spin();
-    
+
     return 0;
 }

@@ -1,4 +1,5 @@
 # Define the goal
+int32 max_loc
 float32 timestamp
 ---
 # Define the result
