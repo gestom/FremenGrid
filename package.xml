@@ -60,6 +60,10 @@ We present experiments using data collected by a mobile robot patrolling an indo
   <build_depend>rospy</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>std_msgs</build_depend>
+<build_depend>goemetry_msgs</build_depend>
+<build_depend>strands_navigation_msgs</build_depend>
+<build_depend>strands_navigation</build_depend>
+
 	<build_depend>message_generation</build_depend>
 	<build_depend>genmsg</build_depend>
 	<build_depend>message_runtime</build_depend>
@@ -72,10 +76,13 @@ We present experiments using data collected by a mobile robot patrolling an indo
 	<run_depend>message_runtime</run_depend>
 	<run_depend>genmsg</run_depend>
 	<run_depend>sensor_msgs</run_depend>
+<run_depend>geometry_msgs</run_depend>
   <run_depend>pcl_conversions</run_depend>
   <run_depend>pcl_ros</run_depend>
 <build_depend>libpcl-all-dev</build_depend>
   <run_depend>libpcl-all</run_depend>
+<run_depend>strands_navigation_msgs</run_depend>
+<run_depend>strands_navigation</run_depend>
 
 <build_depend>actionlib</build_depend>
 <build_depend>actionlib_msgs</build_depend>
