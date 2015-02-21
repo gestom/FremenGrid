@@ -7,7 +7,6 @@
 #include <move_base_msgs/MoveBaseAction.h>
 #include <actionlib/server/simple_action_server.h>
 #include <actionlib/client/simple_action_client.h>
-//#include <actionlib/client/terminal_state.h>
 
 #include <fremen/ExecutionAction.h>
 #include <strands_navigation_msgs/MonitoredNavigationAction.h>
@@ -82,12 +81,13 @@ void execute(const fremen::ExecutionGoalConstPtr& goal, Server* as)
     float pan[] =  { 0.00, 0.90, 1.80, 2.70, 2.70, 1.80, 0.90, 0.00,-0.90,-1.80,-2.70,-2.70,-1.80,-0.90,0.00};
     float tilt[] = { 0.50, 0.50, 0.50, 0.50,-0.30,-0.30,-0.30,-0.30,-0.30,-0.30,-0.30, 0.50, 0.50, 0.50,0.00};
 
-    int n = 1;//(int) goal->locations.poses.size();
+    int n = (int) goal->locations.poses.size();
 
     ROS_INFO("received %d locations to visit in %f minutes", n, 0.0);
 
     for(int i = 0; i < n; i++)
     {
+
 
 //        char cr_goal[10];
 //        sprintf(cr_goal, "%d/%d", i, n);
@@ -95,18 +95,20 @@ void execute(const fremen::ExecutionGoalConstPtr& goal, Server* as)
 //        feedback.time_remaining = 0;//TODO
 //        as->publishFeedback(feedback);
 
-        //current_goal.target_pose.pose = goal->locations.poses[i];
-        //ac_nav_ptr->sendGoal(current_goal);
+
+        current_goal.target_pose.pose = goal->locations.poses[i];
+        ROS_INFO("moving to location %d -> (%f,%f)",  i, goal->locations.poses[i].position.x, goal->locations.poses[i].position.y);
+        ac_nav_ptr->sendGoal(current_goal);
 
 //        ROS_INFO("moving to location %d -> (%f,%f)",  i, goal->locations.poses[i].position.x, goal->locations.poses[i].position.y);
-//        ac_nav_ptr->waitForResult(ros::Duration(0.0));
+        ac_nav_ptr->waitForResult(ros::Duration(0.0));
 
-//        if (ac_nav_ptr->getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
-//        {
+        if (ac_nav_ptr->getState() == actionlib::SimpleClientGoalState::SUCCEEDED)
+        {
             ROS_INFO("Monitored navigation: SUCCEEDED!");
             point = 0;
             movePtu(pan[point],tilt[point]);
-ROS_INFO("here1");
+
             ros::spinOnce();
             while (ros::ok() && point < numPoints)
             {
@@ -153,11 +155,11 @@ ROS_INFO("here1");
                 }
                 ros::spinOnce();
             }
-//        }
-//        else if(ac_nav_ptr->getState() == actionlib::SimpleClientGoalState::PREEMPTED || ac_nav_ptr->getState() == actionlib::SimpleClientGoalState::ABORTED)
-//        {
-//            ROS_INFO("Move base failed, trying next goal in the plan...");
-//        }
+        }
+        else if(ac_nav_ptr->getState() == actionlib::SimpleClientGoalState::PREEMPTED || ac_nav_ptr->getState() == actionlib::SimpleClientGoalState::ABORTED)
+        {
+            ROS_INFO("Move base failed, trying next goal in the plan...");
+        }
 
         movePtu(0.0,0.0);
     }
@@ -171,11 +173,12 @@ int main(int argc,char *argv[])
     ros::NodeHandle nh("~");
 
     Server server(n, "executioner", boost::bind(&execute, _1, &server), false);
+    ROS_INFO("starting server...");
     server.start();
 
-//    actionlib::SimpleActionClient<strands_navigation_msgs::MonitoredNavigationAction> ac_nav("monitored_navigation",true);
-//    ac_nav_ptr = &ac_nav;
-//    ac_nav.waitForServer();
+    actionlib::SimpleActionClient<strands_navigation_msgs::MonitoredNavigationAction> ac_nav("monitored_navigation",true);
+    ac_nav_ptr = &ac_nav;
+    ac_nav.waitForServer();
 
     //Subscribers
     ros::Subscriber ptu_sub = n.subscribe("/ptu/state", 10, ptuCallback);

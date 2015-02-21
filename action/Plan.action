@@ -1,10 +1,10 @@
 # Define the goal
 int32 max_loc
-float32 timestamp
+int64 t
 ---
 # Define the result
 geometry_msgs/PoseArray locations
-float32[] information
+float32 information
 ---
 # Define a feedback message
 
